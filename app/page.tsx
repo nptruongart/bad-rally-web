@@ -170,7 +170,7 @@ const dict = {
       shareDesc: "Gửi link app này cho bạn bè",
       terms: "Điều khoản dịch vụ",
       privacy: "Chính sách bảo mật",
-      version: "Phiên bản 2.5 (Final Sidebar)"
+      version: "Phiên bản 2.6 (Full UI & Lang)"
     }
   },
   EN: {
@@ -303,7 +303,7 @@ const dict = {
       shareDesc: "Send this app link to friends",
       terms: "Terms of Service",
       privacy: "Privacy Policy",
-      version: "Version 2.5 (Final Sidebar)"
+      version: "Version 2.6 (Full UI & Lang)"
     }
   }
 };
@@ -327,7 +327,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"courts" | "ranking" | "players" | "settings">("courts");
 
   const [lang, setLang] = useState<"VI" | "EN">("VI");
-  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   
   const t = dict[lang]; 
@@ -369,8 +368,6 @@ export default function Home() {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   
   const [hostUrl, setHostUrl] = useState<string>("");
-  
-  // TÍNH NĂNG MỚI: Modal hiển thị khi phòng bị xóa (Đẹp hơn dùng window.alert)
   const [isKickedModalOpen, setIsKickedModalOpen] = useState(false);
 
   useEffect(() => {
@@ -422,7 +419,6 @@ export default function Home() {
             if (userRole === 'guest') setSettings(data.settings || settings);
             else if (!isHostInitialized) { setSettings(data.settings || settings); setIsHostInitialized(true); }
         } else {
-            // Lỗi hoặc phòng đã bị xóa ngay từ đầu
             setIsKickedModalOpen(true);
             localStorage.removeItem('badRallySession');
         }
@@ -433,7 +429,6 @@ export default function Home() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomPin}` }, 
       (payload: any) => {
           if (payload.eventType === 'DELETE') {
-              // Phòng bị xóa -> Hiện Modal chứ không dùng alert nữa
               setIsKickedModalOpen(true);
               localStorage.removeItem('badRallySession');
           } else {
@@ -520,7 +515,6 @@ export default function Home() {
           setIsHostInitialized(false);
           setCurrentScreen('launcher');
       } else {
-          // Guest tự thoát thì xóa session của guest rồi reload trang về đầu
           localStorage.removeItem('badRallySession');
           window.location.reload();
       }
@@ -533,7 +527,7 @@ export default function Home() {
 
   const handleCloseKickedModal = () => {
       setIsKickedModalOpen(false);
-      window.location.reload(); // Reload để dọn dẹp state rác
+      window.location.reload(); 
   }
 
   // --- CÁC HÀM XỬ LÝ (HOST) ---
@@ -784,6 +778,12 @@ export default function Home() {
     return (
       <div className="relative w-full h-screen flex flex-col items-center justify-center overflow-hidden z-10 bg-[#f3f4f6]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/crumpled-paper.png')" }} onMouseMove={handleMouseMove}>
         <style dangerouslySetInnerHTML={{__html: `@keyframes floatSlow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } } @keyframes floatFast { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-25px); } } .animate-float-slow { animation: floatSlow 6s ease-in-out infinite; } .animate-float-fast { animation: floatFast 4s ease-in-out infinite; }`}} />
+        
+        {/* NÚT CHUYỂN NGÔN NGỮ Ở TRANG CHỦ */}
+        <button onClick={() => setLang(lang === 'VI' ? 'EN' : 'VI')} className="absolute top-4 right-4 z-50 bg-[#bfdbfe] border-[3px] border-black px-3 py-1 text-sm font-black shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] transition-all">
+            {lang === 'VI' ? '🇻🇳 VI' : '🇬🇧 EN'}
+        </button>
+
         <div className="absolute top-[15%] right-[20%] z-0 pointer-events-none transition-transform duration-300 ease-out animate-float-slow" style={{ transform: `translate(${mousePos.x * 2}px, ${mousePos.y * 2}px)` }}>
             <div className="w-28 h-28 bg-yellow-400 rounded-full border-[3px] border-black flex items-center justify-center text-center shadow-[4px_4px_0_0_#000] rotate-12">
                 <span className="text-[10px] font-black uppercase leading-tight" dangerouslySetInnerHTML={{__html: t.badge}}></span>
@@ -825,6 +825,9 @@ export default function Home() {
   if (currentScreen === "role_select") {
     return (
       <div className="relative w-full h-screen flex items-center justify-center bg-[#f3f4f6]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/crumpled-paper.png')" }}>
+         <button onClick={() => setLang(lang === 'VI' ? 'EN' : 'VI')} className="absolute top-4 right-4 z-50 bg-[#bfdbfe] border-[3px] border-black px-3 py-1 text-sm font-black shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] transition-all">
+            {lang === 'VI' ? '🇻🇳 VI' : '🇬🇧 EN'}
+         </button>
          <div className="bg-white border-[4px] border-black p-8 shadow-[8px_8px_0_0_#000] max-w-md w-full mx-4 flex flex-col gap-6">
             <div className="text-center">
                 <div className="flex items-center justify-center font-black text-2xl mb-2"><i className="fa-solid fa-circle-check text-yellow-400 mr-2 text-stroke-1"></i><span className="text-blue-600">BAD</span><span className="text-yellow-400">RALLY</span></div>
@@ -886,6 +889,9 @@ export default function Home() {
   if (currentScreen === "guest_join") {
     return (
       <div className="relative w-full h-screen flex items-center justify-center bg-[#f3f4f6]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/crumpled-paper.png')" }}>
+         <button onClick={() => setLang(lang === 'VI' ? 'EN' : 'VI')} className="absolute top-4 right-4 z-50 bg-[#bfdbfe] border-[3px] border-black px-3 py-1 text-sm font-black shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] transition-all">
+            {lang === 'VI' ? '🇻🇳 VI' : '🇬🇧 EN'}
+         </button>
          <div className="bg-white border-[4px] border-black p-6 shadow-[8px_8px_0_0_#000] max-w-sm w-full mx-4 flex flex-col gap-5">
             <h2 className="font-black text-xl uppercase text-center border-b-4 border-yellow-400 pb-2">{t.joinMatch}</h2>
             
@@ -1004,7 +1010,7 @@ export default function Home() {
           </div>
       </div>
 
-      {/* HEADER BẢN ĐẦY ĐỦ ĐÃ FIX ZOOM */}
+      {/* HEADER BẢN ĐẦY ĐỦ (CÓ NÚT LANG, ZOOM, MENU) */}
       <div className="bg-white border-b-[3px] border-black flex justify-between items-center p-2 sticky top-0 z-30 shadow-sm w-full">
         <button onClick={handleExitRoom} className="neo-btn bg-white px-3 py-1 text-sm rounded flex items-center shadow-[2px_2px_0_0_#000] border-2 border-black font-black"><i className="fa-solid fa-arrow-left mr-2"></i> Thoát</button>
         
@@ -1021,7 +1027,6 @@ export default function Home() {
                 </button>
             )}
             
-            {/* ĐÃ KHÔI PHỤC NÚT ĐẶT LẠI ZOOM TRÊN MỌI TAB */}
             <button onClick={() => setZoomLevel(1)} className="bg-white neo-border px-2 py-1 text-[10px] font-bold flex items-center gap-1 hover:bg-gray-100 hidden md:flex">
                 <i className="fa-solid fa-rotate-left"></i> {t.resetLayout}
             </button>
@@ -1032,6 +1037,11 @@ export default function Home() {
                 <button onClick={() => setZoomLevel(p => Math.min(2, p + 0.1))} className="px-2 py-1 text-gray-600 hover:text-black hover:bg-gray-200">+</button>
             </div>
             
+            {/* NÚT CHUYỂN NGÔN NGỮ TRÊN HEADER */}
+            <button onClick={() => setLang(lang === 'VI' ? 'EN' : 'VI')} className="bg-[#bfdbfe] border-2 border-black px-2 py-1 text-[10px] font-black shadow-[2px_2px_0_0_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all hidden sm:block">
+                {lang === 'VI' ? '🇻🇳 VI' : '🇬🇧 EN'}
+            </button>
+
             <button onClick={() => setIsSidebarOpen(true)} className="hover:bg-gray-200 px-3 py-1 rounded transition-colors ml-2"><i className="fa-solid fa-ellipsis-vertical text-xl"></i></button>
         </div>
       </div>
