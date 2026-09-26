@@ -89,7 +89,7 @@ const dict = {
     noMatchResults: "Chưa có kết quả trận đấu.",
     matchLabel: "Trận",
     winLabel: "Thắng",
-    gameSettings: "Cài đặt trận đấu",
+    gameSettings: "CÀI ĐẶT TRẬN ĐẤU",
     eventName: "Tên sự kiện",
     totalCourts: "Tổng số sân",
     layout: "Bố cục",
@@ -104,8 +104,8 @@ const dict = {
     weights: { playCountFairness: "Công bằng số trận", waitTimePriority: "Ưu tiên thời gian chờ", avoidSamePartner: "Tránh trùng đồng đội", avoidSameOpponents: "Tránh trùng đối thủ", skillBalance: "Cân bằng kỹ năng", keepPreviousPair: "Giữ cặp trận trước" },
     trackResults: "Ghi nhận điểm số (Thắng/Thua)",
     applyChanges: "LƯU TRÊN CLOUD",
-    addPlayersMenu: "Thêm người chơi",
-    resetCountsTitle: "Đặt lại số trận?",
+    addPlayersMenu: "THÊM NGƯỜI CHƠI",
+    resetCountsTitle: "ĐẶT LẠI SỐ TRẬN?",
     resetCountsDesc: "Bắt đầu phiên mới bằng cách đặt lại số trận, thứ tự chờ và lịch sử ghép cặp. Các sân sẽ bị xóa và bộ đếm thời gian dừng lại. Thành viên, cặp cố định, trạng thái nghỉ, cài đặt sân và kết quả đã lưu sẽ được giữ nguyên.",
     resetCountsBtn: "Đặt lại số trận",
     dangerZone: "Khu vực nguy hiểm",
@@ -154,20 +154,23 @@ const dict = {
     guestWaitingDraft: "Chờ chủ sân xếp trận...",
     guestActiveTag: "ĐANG ĐÁ",
     guestScoringTag: "CHỜ KẾT QUẢ...",
+    hostExitWarning: "⚠️ BẠN LÀ CHỦ SÂN!\n\nNếu bạn thoát, phòng này sẽ bị XÓA và tất cả Khách sẽ bị ngắt kết nối.\nBạn có chắc chắn muốn thoát và đóng phòng?",
+    roomDeletedTitle: "Phòng Đã Đóng",
+    roomDeletedAlert: "Chủ sân đã kết thúc sự kiện và đóng phòng này. Cảm ơn bạn đã tham gia!",
     sidebar: {
       login: "Đăng nhập",
       loginDesc: "Lưu trữ thành viên và số liệu thống kê lên đám mây.",
       exitRoom: "Thoát phòng",
-      exitRoomDesc: "Quay lại màn hình chính",
-      scrollTop: "Trở lại đầu trang",
-      scrollTopDesc: "Quay lại màn hình tiêu đề",
-      contact: "Liên hệ với chúng tôi",
-      contactDesc: "Hãy liên hệ với chúng tôi",
-      share: "Chia sẻ",
-      shareDesc: "Chia sẻ ứng dụng với bạn bè",
+      exitRoomDesc: "Quay lại màn hình chính và ngắt kết nối.",
+      scrollTop: "Trở lại mã QR",
+      scrollTopDesc: "Quay lại màn hình hiển thị mã QR",
+      contact: "Liên hệ hỗ trợ",
+      contactDesc: "Báo lỗi hoặc góp ý tính năng",
+      share: "Chia sẻ ứng dụng",
+      shareDesc: "Gửi link app này cho bạn bè",
       terms: "Điều khoản dịch vụ",
       privacy: "Chính sách bảo mật",
-      version: "Phiên bản 2.1 (Auto QR Host)"
+      version: "Phiên bản 2.5 (Final Sidebar)"
     }
   },
   EN: {
@@ -219,7 +222,7 @@ const dict = {
     noMatchResults: "No match results recorded.",
     matchLabel: "Games",
     winLabel: "Wins",
-    gameSettings: "Game Settings",
+    gameSettings: "GAME SETTINGS",
     eventName: "Event Name",
     totalCourts: "Total Courts",
     layout: "Layout",
@@ -234,8 +237,8 @@ const dict = {
     weights: { playCountFairness: "Play count fairness", waitTimePriority: "Wait time priority", avoidSamePartner: "Avoid same partner", avoidSameOpponents: "Avoid same opponents", skillBalance: "Skill balance", keepPreviousPair: "Keep previous pair" },
     trackResults: "Track Match Results (Win/Loss)",
     applyChanges: "SAVE TO CLOUD",
-    addPlayersMenu: "Add Players",
-    resetCountsTitle: "Reset Game Counts?",
+    addPlayersMenu: "ADD PLAYERS",
+    resetCountsTitle: "RESET GAME COUNTS?",
     resetCountsDesc: "Start a new session by resetting game counts, waiting order, and pairing history. Courts will be cleared and the timer stopped. Members, fixed pairs, break status, court settings, and recorded results will be kept.",
     resetCountsBtn: "Reset game counts",
     dangerZone: "Danger Zone",
@@ -284,20 +287,23 @@ const dict = {
     guestWaitingDraft: "Waiting for host to arrange match...",
     guestActiveTag: "PLAYING",
     guestScoringTag: "WAITING FOR RESULT...",
+    hostExitWarning: "⚠️ YOU ARE THE HOST!\n\nIf you exit, this room will be DELETED and all Guests will be disconnected.\nAre you sure you want to exit and close the room?",
+    roomDeletedTitle: "Room Closed",
+    roomDeletedAlert: "The host has ended the event and closed this room. Thank you for participating!",
     sidebar: {
       login: "Login",
       loginDesc: "Save members and statistics to the cloud.",
       exitRoom: "Exit Room",
-      exitRoomDesc: "Return to the main screen",
-      scrollTop: "Return to Title",
-      scrollTopDesc: "Go back to the launcher screen",
-      contact: "Contact Us",
-      contactDesc: "Get in touch with our team",
-      share: "Share",
-      shareDesc: "Share the app with friends",
+      exitRoomDesc: "Return to main menu and disconnect.",
+      scrollTop: "Back to QR Code",
+      scrollTopDesc: "Show the room QR code again",
+      contact: "Contact Support",
+      contactDesc: "Report an issue or suggest features",
+      share: "Share App",
+      shareDesc: "Send this app link to friends",
       terms: "Terms of Service",
       privacy: "Privacy Policy",
-      version: "Version 2.1 (Auto QR Host)"
+      version: "Version 2.5 (Final Sidebar)"
     }
   }
 };
@@ -309,7 +315,6 @@ const skillEnMap: Record<SkillLevel, string> = {
 };
 const ALL_SKILLS: SkillLevel[] = ['Mới chơi', 'Yếu-', 'Yếu', 'Yếu+', 'Trung bình-', 'Trung bình', 'Trung bình+', 'Khá-', 'Khá', 'Khá+'];
 
-// Hàm sinh ID cứng thay thế Date.now() để tránh trùng lặp
 const generateUUID = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -363,17 +368,36 @@ export default function Home() {
   const [isHostInitialized, setIsHostInitialized] = useState(false);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   
-  // Lưu host URL gốc để sinh mã QR động
   const [hostUrl, setHostUrl] = useState<string>("");
+  
+  // TÍNH NĂNG MỚI: Modal hiển thị khi phòng bị xóa (Đẹp hơn dùng window.alert)
+  const [isKickedModalOpen, setIsKickedModalOpen] = useState(false);
 
   useEffect(() => {
-    // Tự động quét lấy đường link gốc của trình duyệt (ví dụ http://192.168.1.10:3000 hoặc link Vercel)
     if (typeof window !== "undefined") {
         setHostUrl(window.location.origin);
+        const savedSession = localStorage.getItem('badRallySession');
+        if (savedSession) {
+            try {
+                const { role, pin, screen } = JSON.parse(savedSession);
+                if (pin && role) {
+                    setUserRole(role);
+                    setRoomPin(pin);
+                    setCurrentScreen(screen || 'app');
+                    if (role === 'guest') setActiveTab('players');
+                }
+            } catch (e) {
+                console.error("Lỗi đọc session cũ:", e);
+                localStorage.removeItem('badRallySession');
+            }
+        }
     }
   }, []);
 
-  // ĐỒNG BỘ CỤC BỘ KHỞI TẠO SÂN THEO SETTING
+  const saveSession = (role: UserRole, pin: string, screen: string) => {
+      localStorage.setItem('badRallySession', JSON.stringify({ role, pin, screen }));
+  }
+
   useEffect(() => {
     setCourts(prev => {
       if (prev.length === settings.totalCourts) return prev;
@@ -390,7 +414,6 @@ export default function Home() {
   useEffect(() => {
     if (!roomPin || currentScreen !== 'app') return;
 
-    // Fetch dữ liệu ban đầu
     const fetchRoom = async () => {
         const { data, error } = await supabase.from('rooms').select('*').eq('id', roomPin).single();
         if (data) {
@@ -398,22 +421,28 @@ export default function Home() {
             setCourts(data.courts || []);
             if (userRole === 'guest') setSettings(data.settings || settings);
             else if (!isHostInitialized) { setSettings(data.settings || settings); setIsHostInitialized(true); }
+        } else {
+            // Lỗi hoặc phòng đã bị xóa ngay từ đầu
+            setIsKickedModalOpen(true);
+            localStorage.removeItem('badRallySession');
         }
     };
     fetchRoom();
 
-    // Subscribe lắng nghe thay đổi
     const channel = supabase.channel(`room_${roomPin}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomPin}` }, 
       (payload: any) => {
-          const newData = payload.new;
-          if(newData) {
-              setPlayers(newData.players || []);
-              setCourts(newData.courts || []);
-              if (userRole === 'guest') setSettings(newData.settings || settings);
-          } else if (payload.eventType === 'DELETE') {
-              alert("Phòng đã bị chủ sân đóng!");
-              setCurrentScreen('launcher');
+          if (payload.eventType === 'DELETE') {
+              // Phòng bị xóa -> Hiện Modal chứ không dùng alert nữa
+              setIsKickedModalOpen(true);
+              localStorage.removeItem('badRallySession');
+          } else {
+              const newData = payload.new;
+              if(newData && Object.keys(newData).length > 0) {
+                  setPlayers(newData.players || []);
+                  setCourts(newData.courts || []);
+                  if (userRole === 'guest') setSettings(newData.settings || settings);
+              }
           }
       }).subscribe();
 
@@ -440,22 +469,18 @@ export default function Home() {
         const pin = generateRoomPin();
         const initialCourts = Array.from({length: settings.totalCourts}, (_, i) => ({ id: i + 1, status: 'available', players: [], matchType: '2v2' })) as Court[];
         
-        const { error } = await supabase.from('rooms').insert([{
-            id: pin,
-            host_id: authData.user.id,
-            settings: settings,
-            players: [],
-            courts: initialCourts
+        await supabase.from('rooms').insert([{
+            id: pin, host_id: authData.user.id, settings: settings, players: [], courts: initialCourts
         }]);
 
-        if (error) throw error;
-        
         setUserRole('host');
         setRoomPin(pin);
         setCurrentScreen('host_setup');
+        saveSession('host', pin, 'host_setup');
+
     } catch (err: any) {
         console.error(err);
-        alert("Lỗi tạo phòng! Đảm bảo bạn đã chạy mã SQL và bật Anonymous Login trên Supabase. Chi tiết: " + err.message);
+        alert("Lỗi tạo phòng! Đảm bảo bạn đã bật Anonymous Login trên Supabase.");
     }
   };
 
@@ -466,8 +491,6 @@ export default function Home() {
         if (error || !roomData) { alert("Mã phòng không tồn tại hoặc đã bị đóng!"); return; }
 
         const { data: authData } = await supabase.auth.signInAnonymously();
-        
-        // Sử dụng UUID để tránh trùng lặp
         const newGuest: Player = { id: authData?.user?.id || generateUUID(), name: guestName.trim(), skill: guestSkill, playCount: 0, wins: 0, status: 'waiting' };
         
         const newPlayers = [...(roomData.players || []), newGuest];
@@ -477,15 +500,41 @@ export default function Home() {
         setUserRole('guest');
         setCurrentScreen('app');
         setActiveTab('players');
+        saveSession('guest', roomPin.trim(), 'app');
+
     } catch (err: any) { console.error(err); alert("Lỗi tham gia phòng: " + err.message); }
   };
 
-  const handleExitRoom = () => {
-      setRoomPin("");
-      setIsSidebarOpen(false);
-      setIsHostInitialized(false);
-      setCurrentScreen('launcher');
+  const handleExitRoom = async () => {
+      if (userRole === 'host') {
+          const isConfirm = window.confirm(t.hostExitWarning);
+          if (!isConfirm) return; 
+          
+          if (roomPin) {
+              try { await supabase.from('rooms').delete().eq('id', roomPin); } 
+              catch (e) { console.error("Lỗi xóa phòng:", e); }
+          }
+          localStorage.removeItem('badRallySession');
+          setRoomPin("");
+          setIsSidebarOpen(false);
+          setIsHostInitialized(false);
+          setCurrentScreen('launcher');
+      } else {
+          // Guest tự thoát thì xóa session của guest rồi reload trang về đầu
+          localStorage.removeItem('badRallySession');
+          window.location.reload();
+      }
   };
+
+  const handleGoToDashboard = () => {
+      setCurrentScreen('app');
+      saveSession('host', roomPin, 'app');
+  }
+
+  const handleCloseKickedModal = () => {
+      setIsKickedModalOpen(false);
+      window.location.reload(); // Reload để dọn dẹp state rác
+  }
 
   // --- CÁC HÀM XỬ LÝ (HOST) ---
   const handleAddPlayer = () => {
@@ -511,7 +560,7 @@ export default function Home() {
   };
   
   const handleRemoveAllPlayers = () => { 
-      if(confirm(t.confirmDeleteAll)) {
+      if(window.confirm(t.confirmDeleteAll)) {
           const newCourts = courts.map(c => ({...c, status: 'available' as const, players: []}));
           syncData([], newCourts);
       }
@@ -698,12 +747,14 @@ export default function Home() {
   };
 
   const handleResetEvent = async () => {
-      if(confirm(t.confirmResetEvent)) {
+      if(window.confirm(t.confirmResetEvent)) {
           if (!roomPin) return;
           try {
               await supabase.from('rooms').delete().eq('id', roomPin);
               setPlayers([]);
-              handleExitRoom();
+              localStorage.removeItem('badRallySession');
+              setRoomPin("");
+              setCurrentScreen('launcher');
           } catch (e) { console.error(e); }
       }
   };
@@ -805,7 +856,6 @@ export default function Home() {
   // GIAO DIỆN CHỦ SÂN TẠO PHÒNG (MÃ QR ĐỘNG)
   // ==========================================
   if (currentScreen === "host_setup") {
-    // FIX: Tự động lấy đường link gốc của máy hiện tại để tạo mã QR (Ví dụ: http://192.168.1.10:3000/join/...)
     const linkToJoin = hostUrl ? `${hostUrl}?pin=${roomPin}` : `https://badrally.vercel.app?pin=${roomPin}`;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(linkToJoin)}`;
 
@@ -821,12 +871,10 @@ export default function Home() {
 
             <div className="border-4 border-black p-2 bg-white relative">
                 <img src={qrUrl} alt="QR Code" className="w-48 h-48" />
-                {/* Ẩn link bên dưới mã QR để dễ debug xem app có lấy đúng địa chỉ mạng LAN không */}
-                <div className="absolute -bottom-4 left-0 w-full text-center text-[8px] text-gray-300 opacity-50 truncate px-1">{linkToJoin}</div>
             </div>
             <p className="text-xs font-bold text-center text-gray-500">{t.qrDesc}</p>
 
-            <button onClick={() => setCurrentScreen('app')} className="w-full bg-[#fcd34d] border-[3px] border-black py-4 text-sm font-black uppercase shadow-[4px_4px_0_0_#000] hover:bg-[#fbbf24] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">{t.goToDashboard}</button>
+            <button onClick={handleGoToDashboard} className="w-full bg-[#fcd34d] border-[3px] border-black py-4 text-sm font-black uppercase shadow-[4px_4px_0_0_#000] hover:bg-[#fbbf24] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">{t.goToDashboard}</button>
          </div>
       </div>
     );
@@ -871,7 +919,23 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen w-full bg-transparent z-50 absolute inset-0 overflow-hidden">
       
-      {/* SIDEBAR */}
+      {/* MODAL THÔNG BÁO BỊ ĐUỔI KHỎI PHÒNG (THAY CHO ALERT) */}
+      {isKickedModalOpen && (
+          <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-white border-[4px] border-black p-8 max-w-sm w-full text-center shadow-[8px_8px_0_0_#facc15] animate-bounce-short">
+                  <div className="w-16 h-16 bg-red-100 border-[3px] border-black rounded-full flex items-center justify-center mx-auto mb-4">
+                      <i className="fa-solid fa-person-walking-arrow-right text-red-600 text-3xl"></i>
+                  </div>
+                  <h2 className="text-xl font-black uppercase mb-2 text-red-600">{t.roomDeletedTitle}</h2>
+                  <p className="text-sm font-bold text-gray-700 mb-6">{t.roomDeletedAlert}</p>
+                  <button onClick={handleCloseKickedModal} className="w-full bg-yellow-400 border-[3px] border-black py-3 font-black uppercase shadow-[4px_4px_0_0_#000] hover:bg-yellow-300 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
+                      OK
+                  </button>
+              </div>
+          </div>
+      )}
+
+      {/* SIDEBAR BẢN ĐẦY ĐỦ */}
       <div className={`fixed inset-0 z-[60] ${isSidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
           <div className={`absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0'}`} onClick={() => setIsSidebarOpen(false)}></div>
           <div className={`absolute top-0 right-0 w-[320px] max-w-[85vw] h-full bg-[#f8f9fa] border-l-[3px] border-black transform transition-transform duration-300 ease-out flex flex-col ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
@@ -884,24 +948,63 @@ export default function Home() {
                       <button onClick={() => setIsSidebarOpen(false)} className="text-xl font-black hover:text-red-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
                   </div>
               </div>
+              
               <div className="p-4 flex flex-col gap-3 overflow-y-auto no-scrollbar flex-1">
-                  <div className="bg-black text-white p-3 font-black text-xs uppercase flex items-center justify-between shadow-[3px_3px_0_0_#facc15]">
+                  <div className="bg-black text-white p-3 font-black text-xs uppercase flex items-center justify-between shadow-[3px_3px_0_0_#facc15] mb-2">
                       <span>Role: {userRole === 'host' ? t.hostRoleBadge : t.guestRoleBadge}</span>
                       {userRole === 'host' && <span className="bg-white text-black px-2 py-0.5 text-[9px]">PIN: {roomPin}</span>}
                   </div>
 
-                  <button onClick={handleExitRoom} className="bg-white border-[3px] border-black rounded-lg p-3 text-left shadow-[3px_3px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_#000] active:shadow-none transition-all flex gap-3 items-center group mt-2">
-                      <div className="w-8 h-8 rounded-full border-2 border-black bg-[#bbf7d0] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform"><i className="fa-solid fa-right-from-bracket"></i></div>
+                  {userRole === 'host' && (
+                      <button onClick={() => { setIsSidebarOpen(false); setCurrentScreen('host_setup'); }} className="bg-white border-[3px] border-black rounded-lg p-3 text-left shadow-[3px_3px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_#000] active:shadow-none transition-all flex gap-3 items-center group">
+                          <div className="w-8 h-8 rounded-full border-2 border-black bg-[#bfdbfe] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform"><i className="fa-solid fa-qrcode"></i></div>
+                          <div>
+                              <div className="font-black text-sm leading-tight">{t.sidebar.scrollTop}</div>
+                              <div className="text-[9px] font-bold text-gray-700 mt-0.5 leading-tight">{t.sidebar.scrollTopDesc}</div>
+                          </div>
+                      </button>
+                  )}
+
+                  <button className="bg-white border-[3px] border-black rounded-lg p-3 text-left shadow-[3px_3px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_#000] active:shadow-none transition-all flex gap-3 items-center group">
+                      <div className="w-8 h-8 rounded-full border-2 border-black bg-[#fef08a] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform"><i className="fa-solid fa-share-nodes"></i></div>
                       <div>
-                          <div className="font-black text-sm leading-tight">{t.sidebar.exitRoom}</div>
-                          <div className="text-[9px] font-bold text-gray-700 mt-0.5 leading-tight">{t.sidebar.exitRoomDesc}</div>
+                          <div className="font-black text-sm leading-tight">{t.sidebar.share}</div>
+                          <div className="text-[9px] font-bold text-gray-700 mt-0.5 leading-tight">{t.sidebar.shareDesc}</div>
                       </div>
                   </button>
+
+                  <button className="bg-white border-[3px] border-black rounded-lg p-3 text-left shadow-[3px_3px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_#000] active:shadow-none transition-all flex gap-3 items-center group">
+                      <div className="w-8 h-8 rounded-full border-2 border-black bg-[#e5e7eb] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform"><i className="fa-solid fa-headset"></i></div>
+                      <div>
+                          <div className="font-black text-sm leading-tight">{t.sidebar.contact}</div>
+                          <div className="text-[9px] font-bold text-gray-700 mt-0.5 leading-tight">{t.sidebar.contactDesc}</div>
+                      </div>
+                  </button>
+
+                  <button onClick={handleExitRoom} className="bg-red-50 border-[3px] border-red-600 rounded-lg p-3 text-left shadow-[3px_3px_0_0_#dc2626] hover:bg-red-100 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_#dc2626] active:shadow-none transition-all flex gap-3 items-center group mt-auto">
+                      <div className="w-8 h-8 rounded-full border-2 border-red-600 bg-white flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform"><i className="fa-solid fa-right-from-bracket text-red-600"></i></div>
+                      <div>
+                          <div className="font-black text-sm leading-tight text-red-700">{t.sidebar.exitRoom}</div>
+                          <div className="text-[9px] font-bold text-red-600 mt-0.5 leading-tight">{t.sidebar.exitRoomDesc}</div>
+                      </div>
+                  </button>
+              </div>
+
+              <div className="p-4 border-t-2 border-dashed border-gray-300 space-y-3 pb-8">
+                  <button className="flex items-center justify-between w-full text-[11px] font-bold text-gray-600 hover:text-black transition-colors"><span><i className="fa-regular fa-file-alt w-5 text-center"></i> {t.sidebar.terms}</span><i className="fa-solid fa-chevron-right text-[10px]"></i></button>
+                  <button className="flex items-center justify-between w-full text-[11px] font-bold text-gray-600 hover:text-black transition-colors"><span><i className="fa-solid fa-shield-halved w-5 text-center"></i> {t.sidebar.privacy}</span><i className="fa-solid fa-chevron-right text-[10px]"></i></button>
+                  <div className="mt-6 pt-4 flex flex-col items-center justify-center gap-1 opacity-60">
+                      <div className="flex items-center border border-black rounded px-2 py-0.5 bg-yellow-100">
+                          <i className="fa-solid fa-circle-check text-yellow-500 mr-1 text-[8px]"></i>
+                          <span className="font-black text-[8px] text-blue-600">BAD</span><span className="font-black text-[8px] text-yellow-500">RALLY</span>
+                      </div>
+                      <span className="text-[9px] font-bold">{t.sidebar.version}</span>
+                  </div>
               </div>
           </div>
       </div>
 
-      {/* HEADER */}
+      {/* HEADER BẢN ĐẦY ĐỦ ĐÃ FIX ZOOM */}
       <div className="bg-white border-b-[3px] border-black flex justify-between items-center p-2 sticky top-0 z-30 shadow-sm w-full">
         <button onClick={handleExitRoom} className="neo-btn bg-white px-3 py-1 text-sm rounded flex items-center shadow-[2px_2px_0_0_#000] border-2 border-black font-black"><i className="fa-solid fa-arrow-left mr-2"></i> Thoát</button>
         
@@ -917,11 +1020,18 @@ export default function Home() {
                     <i className={`fa-solid ${viewMode === 'grid' ? 'fa-table-list' : 'fa-border-all'}`}></i> {viewMode === 'grid' ? t.tableView : t.gridView}
                 </button>
             )}
+            
+            {/* ĐÃ KHÔI PHỤC NÚT ĐẶT LẠI ZOOM TRÊN MỌI TAB */}
+            <button onClick={() => setZoomLevel(1)} className="bg-white neo-border px-2 py-1 text-[10px] font-bold flex items-center gap-1 hover:bg-gray-100 hidden md:flex">
+                <i className="fa-solid fa-rotate-left"></i> {t.resetLayout}
+            </button>
+            
             <div className="hidden md:flex items-center text-xs font-bold mx-2 border-[2px] border-black bg-white rounded">
                 <button onClick={() => setZoomLevel(p => Math.max(0.5, p - 0.1))} className="px-2 py-1 text-gray-600 hover:text-black hover:bg-gray-200">-</button>
                 <span className="w-10 text-center">{Math.round(zoomLevel * 100)}%</span>
                 <button onClick={() => setZoomLevel(p => Math.min(2, p + 0.1))} className="px-2 py-1 text-gray-600 hover:text-black hover:bg-gray-200">+</button>
             </div>
+            
             <button onClick={() => setIsSidebarOpen(true)} className="hover:bg-gray-200 px-3 py-1 rounded transition-colors ml-2"><i className="fa-solid fa-ellipsis-vertical text-xl"></i></button>
         </div>
       </div>
