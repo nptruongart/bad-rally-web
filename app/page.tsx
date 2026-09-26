@@ -170,7 +170,7 @@ const dict = {
       shareDesc: "Gửi link app này cho bạn bè",
       terms: "Điều khoản dịch vụ",
       privacy: "Chính sách bảo mật",
-      version: "Phiên bản 2.6 (Full UI & Lang)"
+      version: "Phiên bản 2.7 (Animation Drop)"
     }
   },
   EN: {
@@ -303,7 +303,7 @@ const dict = {
       shareDesc: "Send this app link to friends",
       terms: "Terms of Service",
       privacy: "Privacy Policy",
-      version: "Version 2.6 (Full UI & Lang)"
+      version: "Version 2.7 (Animation Drop)"
     }
   }
 };
@@ -777,13 +777,44 @@ export default function Home() {
   if (currentScreen === "launcher") {
     return (
       <div className="relative w-full h-screen flex flex-col items-center justify-center overflow-hidden z-10 bg-[#f3f4f6]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/crumpled-paper.png')" }} onMouseMove={handleMouseMove}>
-        <style dangerouslySetInnerHTML={{__html: `@keyframes floatSlow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } } @keyframes floatFast { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-25px); } } .animate-float-slow { animation: floatSlow 6s ease-in-out infinite; } .animate-float-fast { animation: floatFast 4s ease-in-out infinite; }`}} />
+        <style dangerouslySetInnerHTML={{__html: `
+          @keyframes floatSlow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } } 
+          @keyframes floatFast { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-25px); } } 
+          .animate-float-slow { animation: floatSlow 6s ease-in-out infinite; } 
+          .animate-float-fast { animation: floatFast 4s ease-in-out infinite; }
+          
+          /* HIỆU ỨNG QUẢ CẦU RƠI TỪ TRÊN XUỐNG VÀ TƯNG TƯNG (MÔ PHỎNG TRỌNG LỰC) */
+          @keyframes shuttleDrop {
+            0% { transform: translateY(-120vh) rotate(160deg); opacity: 0; animation-timing-function: ease-in; }
+            5% { opacity: 1; }
+            35% { transform: translateY(0) rotate(160deg); animation-timing-function: ease-out; }
+            55% { transform: translateY(-20vh) rotate(130deg); animation-timing-function: ease-in; }
+            70% { transform: translateY(0) rotate(160deg); animation-timing-function: ease-out; }
+            80% { transform: translateY(-5vh) rotate(145deg); animation-timing-function: ease-in; }
+            90% { transform: translateY(0) rotate(160deg); opacity: 1; }
+            95% { transform: translateY(0) rotate(160deg); opacity: 0; }
+            100% { transform: translateY(0) rotate(160deg); opacity: 0; }
+          }
+        `}} />
         
-        {/* NÚT CHUYỂN NGÔN NGỮ Ở TRANG CHỦ */}
         <button onClick={() => setLang(lang === 'VI' ? 'EN' : 'VI')} className="absolute top-4 right-4 z-50 bg-[#bfdbfe] border-[3px] border-black px-3 py-1 text-sm font-black shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] transition-all">
             {lang === 'VI' ? '🇻🇳 VI' : '🇬🇧 EN'}
         </button>
 
+        {/* CÁC QUẢ CẦU LÔNG RƠI NẢY TƯNG TƯNG */}
+        {[
+          { left: '10%', delay: '0s', duration: '3.5s', size: 'text-4xl' },
+          { left: '35%', delay: '1.2s', duration: '4s', size: 'text-5xl' },
+          { left: '60%', delay: '2.5s', duration: '3.8s', size: 'text-3xl' },
+          { left: '80%', delay: '0.5s', duration: '4.5s', size: 'text-5xl' },
+          { left: '92%', delay: '1.8s', duration: '4.2s', size: 'text-4xl' }
+        ].map((s, i) => (
+          <div key={`drop-${i}`} className={`absolute bottom-[5%] z-0 pointer-events-none opacity-0`} style={{ left: s.left, animation: `shuttleDrop ${s.duration} infinite ${s.delay}` }}>
+              <span className={`${s.size} drop-shadow-[4px_4px_0_rgba(0,0,0,1)] block`}>🏸</span>
+          </div>
+        ))}
+
+        {/* HÌNH TRANG TRÍ BAY LƠ LỬNG */}
         <div className="absolute top-[15%] right-[20%] z-0 pointer-events-none transition-transform duration-300 ease-out animate-float-slow" style={{ transform: `translate(${mousePos.x * 2}px, ${mousePos.y * 2}px)` }}>
             <div className="w-28 h-28 bg-yellow-400 rounded-full border-[3px] border-black flex items-center justify-center text-center shadow-[4px_4px_0_0_#000] rotate-12">
                 <span className="text-[10px] font-black uppercase leading-tight" dangerouslySetInnerHTML={{__html: t.badge}}></span>
@@ -794,9 +825,6 @@ export default function Home() {
         </div>
         <div className="absolute bottom-[20%] left-[20%] z-0 pointer-events-none transition-transform duration-300 ease-out animate-float-slow" style={{ transform: `translate(${mousePos.x * 3}px, ${mousePos.y * 3}px)` }}>
             <div className="w-12 h-12 bg-[#bbf7d0] rounded-full border-[3px] border-black shadow-[4px_4px_0_0_#000] flex items-center justify-center"><div className="w-6 h-1 bg-black rounded-full rotate-45 opacity-20"></div></div>
-        </div>
-        <div className="absolute bottom-[25%] right-[25%] z-0 pointer-events-none transition-transform duration-300 ease-out animate-float-fast" style={{ transform: `translate(${mousePos.x * -2.5}px, ${mousePos.y * -2.5}px)` }}>
-            <span className="text-6xl drop-shadow-[4px_4px_0_rgba(0,0,0,1)] rotate-45">🏸</span>
         </div>
         <div className="absolute bottom-[10%] left-[45%] z-0 pointer-events-none transition-transform duration-300 ease-out animate-float-slow" style={{ transform: `translate(${mousePos.x * 1}px, ${mousePos.y * -1}px)` }}>
             <div className="w-14 h-14 bg-purple-500 border-[3px] border-black flex items-center justify-center text-white text-2xl font-black shadow-[4px_4px_0_0_#000] rotate-6">ダ</div>
