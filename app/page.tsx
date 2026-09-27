@@ -170,7 +170,7 @@ const dict = {
       shareDesc: "Gửi link app này cho bạn bè",
       terms: "Điều khoản dịch vụ",
       privacy: "Chính sách bảo mật",
-      version: "Phiên bản 2.7 (Animation Drop)"
+      version: "Phiên bản 2.8 (Shuttlecock Animation)"
     }
   },
   EN: {
@@ -303,7 +303,7 @@ const dict = {
       shareDesc: "Send this app link to friends",
       terms: "Terms of Service",
       privacy: "Privacy Policy",
-      version: "Version 2.7 (Animation Drop)"
+      version: "Version 2.8 (Shuttlecock Animation)"
     }
   }
 };
@@ -321,6 +321,18 @@ const generateUUID = () => {
         return v.toString(16);
     });
 }
+
+// 🎨 COMPONENT QUẢ CẦU LÔNG VẼ BẰNG SVG SIÊU NÉT 🎨
+const ShuttlecockIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: 'drop-shadow(3px 3px 0px rgba(0,0,0,1))' }}>
+    <path d="M10 14L5 3L8 4L11 13" fill="white" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M14 14L19 3L16 4L13 13" fill="white" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M12 13V2" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M6 7H18" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M8 10H16" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M12 22C14.2091 22 16 20.2091 16 18C16 15.7909 12 13 12 13C12 13 8 15.7909 8 18C8 20.2091 9.79086 22 12 22Z" fill="#facc15" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
 
 export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<"launcher" | "role_select" | "host_setup" | "guest_join" | "app">("launcher");
@@ -783,17 +795,17 @@ export default function Home() {
           .animate-float-slow { animation: floatSlow 6s ease-in-out infinite; } 
           .animate-float-fast { animation: floatFast 4s ease-in-out infinite; }
           
-          /* HIỆU ỨNG QUẢ CẦU RƠI TỪ TRÊN XUỐNG VÀ TƯNG TƯNG (MÔ PHỎNG TRỌNG LỰC) */
+          /* HIỆU ỨNG QUẢ CẦU RƠI TỪ TRÊN XUỐNG VÀ TƯNG TƯNG (GÓC CHÚI XUỐNG) */
           @keyframes shuttleDrop {
-            0% { transform: translateY(-120vh) rotate(160deg); opacity: 0; animation-timing-function: ease-in; }
+            0% { transform: translateY(-120vh) rotate(15deg); opacity: 0; animation-timing-function: ease-in; }
             5% { opacity: 1; }
-            35% { transform: translateY(0) rotate(160deg); animation-timing-function: ease-out; }
-            55% { transform: translateY(-20vh) rotate(130deg); animation-timing-function: ease-in; }
-            70% { transform: translateY(0) rotate(160deg); animation-timing-function: ease-out; }
-            80% { transform: translateY(-5vh) rotate(145deg); animation-timing-function: ease-in; }
-            90% { transform: translateY(0) rotate(160deg); opacity: 1; }
-            95% { transform: translateY(0) rotate(160deg); opacity: 0; }
-            100% { transform: translateY(0) rotate(160deg); opacity: 0; }
+            35% { transform: translateY(0) rotate(-10deg); animation-timing-function: ease-out; }
+            55% { transform: translateY(-20vh) rotate(5deg); animation-timing-function: ease-in; }
+            70% { transform: translateY(0) rotate(-5deg); animation-timing-function: ease-out; }
+            80% { transform: translateY(-5vh) rotate(0deg); animation-timing-function: ease-in; }
+            90% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            95% { transform: translateY(0) rotate(0deg); opacity: 0; }
+            100% { transform: translateY(0) rotate(0deg); opacity: 0; }
           }
         `}} />
         
@@ -801,16 +813,16 @@ export default function Home() {
             {lang === 'VI' ? '🇻🇳 VI' : '🇬🇧 EN'}
         </button>
 
-        {/* CÁC QUẢ CẦU LÔNG RƠI NẢY TƯNG TƯNG */}
+        {/* CÁC QUẢ CẦU LÔNG SVG SIÊU NÉT RƠI TỪ TRÊN XUỐNG */}
         {[
-          { left: '10%', delay: '0s', duration: '3.5s', size: 'text-4xl' },
-          { left: '35%', delay: '1.2s', duration: '4s', size: 'text-5xl' },
-          { left: '60%', delay: '2.5s', duration: '3.8s', size: 'text-3xl' },
-          { left: '80%', delay: '0.5s', duration: '4.5s', size: 'text-5xl' },
-          { left: '92%', delay: '1.8s', duration: '4.2s', size: 'text-4xl' }
+          { left: '10%', delay: '0s', duration: '3.5s', size: 'w-10 h-10' },
+          { left: '35%', delay: '1.2s', duration: '4s', size: 'w-14 h-14' },
+          { left: '60%', delay: '2.5s', duration: '3.8s', size: 'w-8 h-8' },
+          { left: '80%', delay: '0.5s', duration: '4.5s', size: 'w-12 h-12' },
+          { left: '92%', delay: '1.8s', duration: '4.2s', size: 'w-10 h-10' }
         ].map((s, i) => (
           <div key={`drop-${i}`} className={`absolute bottom-[5%] z-0 pointer-events-none opacity-0`} style={{ left: s.left, animation: `shuttleDrop ${s.duration} infinite ${s.delay}` }}>
-              <span className={`${s.size} drop-shadow-[4px_4px_0_rgba(0,0,0,1)] block`}>🏸</span>
+              <ShuttlecockIcon className={s.size} />
           </div>
         ))}
 
