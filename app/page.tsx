@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "../supabase";
+import { Preferences } from '@capacitor/preferences'; // Bộ nhớ chuẩn Native App
 
 // --- CÁC KIỂU DỮ LIỆU ---
 type SkillLevel = 'Mới chơi' | 'Yếu-' | 'Yếu' | 'Yếu+' | 'Trung bình-' | 'Trung bình' | 'Trung bình+' | 'Khá-' | 'Khá' | 'Khá+';
@@ -175,7 +176,7 @@ const dict = {
       shareDesc: "Gửi link app này cho bạn bè",
       terms: "Điều khoản dịch vụ",
       privacy: "Chính sách bảo mật",
-      version: "Phiên bản 3.0 (iDean Edition)"
+      version: "Phiên bản 3.1 (Native Android)"
     }
   },
   EN: {
@@ -311,7 +312,7 @@ const dict = {
       shareDesc: "Send this app link to friends",
       terms: "Terms of Service",
       privacy: "Privacy Policy",
-      version: "Version 3.0 (iDean Edition)"
+      version: "Version 3.1 (Native Android)"
     }
   }
 };
@@ -330,13 +331,11 @@ const generateUUID = () => {
     });
 }
 
-// Helper render Logo Giới tính
 const renderGenderIcon = (gender?: Gender) => {
     if (gender === 'F') return <span className="text-pink-500 font-black ml-1 drop-shadow-[1px_1px_0_#fff]">♀</span>;
     return <span className="text-blue-500 font-black ml-1 drop-shadow-[1px_1px_0_#fff]">♂</span>; 
 };
 
-// 🎨 COMPONENT QUẢ CẦU LÔNG VẼ BẰNG SVG SIÊU NÉT 🎨
 const ShuttlecockIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: 'drop-shadow(3px 3px 0px rgba(0,0,0,1))' }}>
     <path d="M10 14L5 3L8 4L11 13" fill="white" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -358,18 +357,15 @@ export default function Home() {
   const t = dict[lang]; 
   const tSkill = (s: SkillLevel) => lang === "VI" ? s : skillEnMap[s];
 
-  // Role & Room States
   const [userRole, setUserRole] = useState<UserRole>('host');
   const [roomPin, setRoomPin] = useState<string>("");
   const [guestName, setGuestName] = useState("");
   const [guestSkill, setGuestSkill] = useState<SkillLevel>("Trung bình");
   const [guestGender, setGuestGender] = useState<Gender>('M');
 
-  // View States
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
-  // Data States
   const [players, setPlayers] = useState<Player[]>([]);
   const [courts, setCourts] = useState<Court[]>([]);
   const [settings, setSettings] = useState<GameSettings>({
@@ -379,10 +375,7 @@ export default function Home() {
     layoutRows: 2,
     shuffleMode: "Manual",
     trackMatchResults: true,
-    weights: {
-      playCountFairness: 100, waitTimePriority: 80, avoidSamePartner: 70, 
-      avoidSameOpponents: 55, skillBalance: 0, keepPreviousPair: 0,
-    }
+    weights: { playCountFairness: 100, waitTimePriority: 80, avoidSamePartner: 70, avoidSameOpponents: 55, skillBalance: 0, keepPreviousPair: 0 }
   });
 
   const [newPlayerName, setNewPlayerName] = useState("");
@@ -399,29 +392,34 @@ export default function Home() {
   const [hostUrl, setHostUrl] = useState<string>("");
   const [isKickedModalOpen, setIsKickedModalOpen] = useState(false);
 
+  // SỬ DỤNG CAPACITOR PREFERENCES THAY CHO LOCALSTORAGE
   useEffect(() => {
     if (typeof window !== "undefined") {
         setHostUrl(window.location.origin);
-        const savedSession = localStorage.getItem('badRallySession');
-        if (savedSession) {
+        
+        const initSession = async () => {
             try {
-                const { role, pin, screen } = JSON.parse(savedSession);
-                if (pin && role) {
-                    setUserRole(role);
-                    setRoomPin(pin);
-                    setCurrentScreen(screen || 'app');
-                    if (role === 'guest') setActiveTab('players');
+                const { value } = await Preferences.get({ key: 'badRallySession' });
+                if (value) {
+                    const { role, pin, screen } = JSON.parse(value);
+                    if (pin && role) {
+                        setUserRole(role);
+                        setRoomPin(pin);
+                        setCurrentScreen(screen || 'app');
+                        if (role === 'guest') setActiveTab('players');
+                    }
                 }
             } catch (e) {
                 console.error("Lỗi đọc session cũ:", e);
-                localStorage.removeItem('badRallySession');
+                await Preferences.remove({ key: 'badRallySession' });
             }
-        }
+        };
+        initSession();
     }
   }, []);
 
-  const saveSession = (role: UserRole, pin: string, screen: string) => {
-      localStorage.setItem('badRallySession', JSON.stringify({ role, pin, screen }));
+  const saveSession = async (role: UserRole, pin: string, screen: string) => {
+      await Preferences.set({ key: 'badRallySession', value: JSON.stringify({ role, pin, screen }) });
   }
 
   useEffect(() => {
@@ -436,7 +434,6 @@ export default function Home() {
     });
   }, [settings.totalCourts]);
 
-  // LẮNG NGHE SUPABASE REALTIME
   useEffect(() => {
     if (!roomPin || currentScreen !== 'app') return;
 
@@ -449,17 +446,17 @@ export default function Home() {
             else if (!isHostInitialized) { setSettings(data.settings || settings); setIsHostInitialized(true); }
         } else {
             setIsKickedModalOpen(true);
-            localStorage.removeItem('badRallySession');
+            await Preferences.remove({ key: 'badRallySession' });
         }
     };
     fetchRoom();
 
     const channel = supabase.channel(`room_${roomPin}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomPin}` }, 
-      (payload: any) => {
+      async (payload: any) => {
           if (payload.eventType === 'DELETE') {
               setIsKickedModalOpen(true);
-              localStorage.removeItem('badRallySession');
+              await Preferences.remove({ key: 'badRallySession' });
           } else {
               const newData = payload.new;
               if(newData && Object.keys(newData).length > 0) {
@@ -473,7 +470,6 @@ export default function Home() {
     return () => { supabase.removeChannel(channel); };
   }, [roomPin, currentScreen, userRole, isHostInitialized]);
 
-  // HÀM ĐẨY DATA LÊN SUPABASE
   const syncData = async (newPlayers: Player[], newCourts: Court[], newSettings?: GameSettings) => {
       if (!roomPin) return;
       try {
@@ -493,19 +489,14 @@ export default function Home() {
         const pin = generateRoomPin();
         const initialCourts = Array.from({length: settings.totalCourts}, (_, i) => ({ id: i + 1, status: 'available', players: [], matchType: '2v2' })) as Court[];
         
-        await supabase.from('rooms').insert([{
-            id: pin, host_id: authData.user.id, settings: settings, players: [], courts: initialCourts
-        }]);
+        await supabase.from('rooms').insert([{ id: pin, host_id: authData.user.id, settings: settings, players: [], courts: initialCourts }]);
 
         setUserRole('host');
         setRoomPin(pin);
         setCurrentScreen('host_setup');
-        saveSession('host', pin, 'host_setup');
+        await saveSession('host', pin, 'host_setup');
 
-    } catch (err: any) {
-        console.error(err);
-        alert("Lỗi tạo phòng! Đảm bảo bạn đã bật Anonymous Login trên Supabase.");
-    }
+    } catch (err: any) { console.error(err); alert("Lỗi tạo phòng! Đảm bảo bạn đã bật Anonymous Login trên Supabase."); }
   };
 
   const handleJoinRoom = async () => {
@@ -524,7 +515,7 @@ export default function Home() {
         setUserRole('guest');
         setCurrentScreen('app');
         setActiveTab('players');
-        saveSession('guest', roomPin.trim(), 'app');
+        await saveSession('guest', roomPin.trim(), 'app');
 
     } catch (err: any) { console.error(err); alert("Lỗi tham gia phòng: " + err.message); }
   };
@@ -538,28 +529,31 @@ export default function Home() {
               try { await supabase.from('rooms').delete().eq('id', roomPin); } 
               catch (e) { console.error("Lỗi xóa phòng:", e); }
           }
-          localStorage.removeItem('badRallySession');
-          setRoomPin("");
-          setIsSidebarOpen(false);
-          setIsHostInitialized(false);
-          setCurrentScreen('launcher');
-      } else {
-          localStorage.removeItem('badRallySession');
-          window.location.reload();
       }
+      // Native App Reload mượt mà bằng State
+      await Preferences.remove({ key: 'badRallySession' });
+      setRoomPin("");
+      setPlayers([]);
+      setCourts([]);
+      setIsSidebarOpen(false);
+      setIsHostInitialized(false);
+      setCurrentScreen('launcher');
   };
 
-  const handleGoToDashboard = () => {
+  const handleGoToDashboard = async () => {
       setCurrentScreen('app');
-      saveSession('host', roomPin, 'app');
+      await saveSession('host', roomPin, 'app');
   }
 
-  const handleCloseKickedModal = () => {
+  const handleCloseKickedModal = async () => {
       setIsKickedModalOpen(false);
-      window.location.reload(); 
+      await Preferences.remove({ key: 'badRallySession' });
+      setRoomPin("");
+      setPlayers([]);
+      setCourts([]);
+      setCurrentScreen('launcher');
   }
 
-  // --- CÁC HÀM XỬ LÝ (HOST) ---
   const handleAddPlayer = () => {
     if (newPlayerName.trim() === "") return;
     const newPlayer: Player = { id: generateUUID(), name: newPlayerName.trim(), skill: newPlayerSkill, gender: newPlayerGender, playCount: 0, wins: 0, status: 'waiting' };
@@ -619,7 +613,6 @@ export default function Home() {
   };
 
   function updateSetting<K extends keyof GameSettings>(key: K, value: GameSettings[K]) { setSettings(prev => ({ ...prev, [key]: value })); }
-
   const updateWeight = (key: keyof GameSettings['weights'], value: number) => { setSettings(prev => ({ ...prev, weights: { ...prev.weights, [key]: value } })); }
 
   const handleApplySettings = () => {
@@ -775,7 +768,7 @@ export default function Home() {
           try {
               await supabase.from('rooms').delete().eq('id', roomPin);
               setPlayers([]);
-              localStorage.removeItem('badRallySession');
+              await Preferences.remove({ key: 'badRallySession' });
               setRoomPin("");
               setCurrentScreen('launcher');
           } catch (e) { console.error(e); }
@@ -1413,9 +1406,10 @@ export default function Home() {
                                     <button onClick={handleAddPlayer} className="bg-[#fcd34d] border-2 border-black w-10 flex items-center justify-center font-black text-lg hover:bg-[#fbbf24]">+</button>
                                 </div>
                             </div>
+                            {/* CHỌN GIỚI TÍNH BÊN HOST - TAB NGƯỜI CHƠI */}
                             <div className="flex gap-2 max-w-[200px]">
-                                <button onClick={() => setNewPlayerGender('M')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all ${newPlayerGender === 'M' ? 'bg-blue-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-blue-600 text-sm">♂</span> {t.male}</button>
-                                <button onClick={() => setNewPlayerGender('F')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all ${newPlayerGender === 'F' ? 'bg-pink-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-pink-500 text-sm">♀</span> {t.female}</button>
+                                <button onClick={() => setNewPlayerGender('M')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all flex items-center justify-center gap-1 ${newPlayerGender === 'M' ? 'bg-blue-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-blue-600 text-sm">♂</span> {t.male}</button>
+                                <button onClick={() => setNewPlayerGender('F')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all flex items-center justify-center gap-1 ${newPlayerGender === 'F' ? 'bg-pink-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-pink-500 text-sm">♀</span> {t.female}</button>
                             </div>
                         </div>
                     )}
@@ -1567,6 +1561,7 @@ export default function Home() {
                               <label className="text-[10px] font-black uppercase mb-1 block">{t.sortName}</label>
                               <input type="text" className="w-full border-2 border-black p-1.5 text-xs font-bold focus:outline-none focus:border-[3px] mb-2" placeholder={t.playerNamePlaceholder} value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPlayer()} />
                               
+                              {/* CHỌN GIỚI TÍNH BÊN HOST - TAB CÀI ĐẶT */}
                               <div className="flex gap-2 mb-2">
                                   <button onClick={() => setNewPlayerGender('M')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all flex justify-center items-center gap-1 ${newPlayerGender === 'M' ? 'bg-blue-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-blue-600 text-sm">♂</span> {t.male}</button>
                                   <button onClick={() => setNewPlayerGender('F')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all flex justify-center items-center gap-1 ${newPlayerGender === 'F' ? 'bg-pink-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-pink-500 text-sm">♀</span> {t.female}</button>
