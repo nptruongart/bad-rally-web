@@ -175,7 +175,7 @@ const dict = {
       shareDesc: "Gửi link app này cho bạn bè",
       terms: "Điều khoản dịch vụ",
       privacy: "Chính sách bảo mật",
-      version: "Phiên bản 2.9 (Gender Identity)"
+      version: "Phiên bản 3.0 (iDean Edition)"
     }
   },
   EN: {
@@ -311,7 +311,7 @@ const dict = {
       shareDesc: "Send this app link to friends",
       terms: "Terms of Service",
       privacy: "Privacy Policy",
-      version: "Version 2.9 (Gender Identity)"
+      version: "Version 3.0 (iDean Edition)"
     }
   }
 };
@@ -333,9 +333,10 @@ const generateUUID = () => {
 // Helper render Logo Giới tính
 const renderGenderIcon = (gender?: Gender) => {
     if (gender === 'F') return <span className="text-pink-500 font-black ml-1 drop-shadow-[1px_1px_0_#fff]">♀</span>;
-    return <span className="text-blue-500 font-black ml-1 drop-shadow-[1px_1px_0_#fff]">♂</span>; // Mặc định là Nam cho an toàn
+    return <span className="text-blue-500 font-black ml-1 drop-shadow-[1px_1px_0_#fff]">♂</span>; 
 };
 
+// 🎨 COMPONENT QUẢ CẦU LÔNG VẼ BẰNG SVG SIÊU NÉT 🎨
 const ShuttlecockIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: 'drop-shadow(3px 3px 0px rgba(0,0,0,1))' }}>
     <path d="M10 14L5 3L8 4L11 13" fill="white" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -472,6 +473,7 @@ export default function Home() {
     return () => { supabase.removeChannel(channel); };
   }, [roomPin, currentScreen, userRole, isHostInitialized]);
 
+  // HÀM ĐẨY DATA LÊN SUPABASE
   const syncData = async (newPlayers: Player[], newCourts: Court[], newSettings?: GameSettings) => {
       if (!roomPin) return;
       try {
@@ -853,6 +855,9 @@ export default function Home() {
         <div className="absolute bottom-[20%] left-[20%] z-0 pointer-events-none transition-transform duration-300 ease-out animate-float-slow" style={{ transform: `translate(${mousePos.x * 3}px, ${mousePos.y * 3}px)` }}>
             <div className="w-12 h-12 bg-[#bbf7d0] rounded-full border-[3px] border-black shadow-[4px_4px_0_0_#000] flex items-center justify-center"><div className="w-6 h-1 bg-black rounded-full rotate-45 opacity-20"></div></div>
         </div>
+        <div className="absolute bottom-[25%] right-[25%] z-0 pointer-events-none transition-transform duration-300 ease-out animate-float-fast" style={{ transform: `translate(${mousePos.x * -2.5}px, ${mousePos.y * -2.5}px)` }}>
+            <span className="text-6xl drop-shadow-[4px_4px_0_rgba(0,0,0,1)] rotate-45">🏸</span>
+        </div>
         <div className="absolute bottom-[10%] left-[45%] z-0 pointer-events-none transition-transform duration-300 ease-out animate-float-slow" style={{ transform: `translate(${mousePos.x * 1}px, ${mousePos.y * -1}px)` }}>
             <div className="w-14 h-14 bg-purple-500 border-[3px] border-black flex items-center justify-center text-white text-2xl font-black shadow-[4px_4px_0_0_#000] rotate-6">ダ</div>
         </div>
@@ -869,6 +874,11 @@ export default function Home() {
           <button onClick={() => setCurrentScreen("role_select")} className="bg-yellow-400 border-[3px] border-black text-lg font-black uppercase tracking-widest py-4 px-12 shadow-[6px_6px_0_0_#000] hover:bg-yellow-300 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
               {t.startBtn} ➔
           </button>
+        </div>
+
+        {/* THẺ BẢN QUYỀN IDEAN Ở TRANG CHỦ */}
+        <div className="absolute bottom-4 z-50 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 bg-white border-2 border-black shadow-[2px_2px_0_0_#000]">
+          © {new Date().getFullYear()} by <span className="text-blue-600">iDean</span>
         </div>
       </div>
     );
@@ -931,6 +941,9 @@ export default function Home() {
                 <img src={qrUrl} alt="QR Code" className="w-48 h-48" />
             </div>
             <p className="text-xs font-bold text-center text-gray-500">{t.qrDesc}</p>
+            
+            {/* THẺ BẢN QUYỀN IDEAN Ở TRANG QUÉT QR */}
+            <p className="text-[10px] font-black bg-yellow-300 px-3 py-1 border-2 border-black -mt-4 z-10 shadow-[2px_2px_0_0_#000]">Powered by iDean</p>
 
             <button onClick={handleGoToDashboard} className="w-full bg-[#fcd34d] border-[3px] border-black py-4 text-sm font-black uppercase shadow-[4px_4px_0_0_#000] hover:bg-[#fbbf24] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">{t.goToDashboard}</button>
          </div>
@@ -959,7 +972,6 @@ export default function Home() {
                 <label className="text-[11px] font-black uppercase mb-1 block">{t.yourNameLabel}</label>
                 <input type="text" placeholder={t.namePlaceholder} className="w-full border-[3px] border-black p-2 text-sm font-bold focus:outline-none focus:bg-yellow-50 mb-2" value={guestName} onChange={e => setGuestName(e.target.value)} />
                 
-                {/* CHỌN GIỚI TÍNH BÊN KHÁCH */}
                 <div className="flex gap-2">
                     <button onClick={() => setGuestGender('M')} className={`flex-1 border-[3px] border-black py-1.5 text-xs font-black uppercase transition-all flex items-center justify-center gap-1 ${guestGender === 'M' ? 'bg-blue-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-blue-600 text-sm">♂</span> {t.male}</button>
                     <button onClick={() => setGuestGender('F')} className={`flex-1 border-[3px] border-black py-1.5 text-xs font-black uppercase transition-all flex items-center justify-center gap-1 ${guestGender === 'F' ? 'bg-pink-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-pink-500 text-sm">♀</span> {t.female}</button>
@@ -1066,6 +1078,9 @@ export default function Home() {
                           <span className="font-black text-[8px] text-blue-600">BAD</span><span className="font-black text-[8px] text-yellow-500">RALLY</span>
                       </div>
                       <span className="text-[9px] font-bold">{t.sidebar.version}</span>
+                      
+                      {/* THẺ BẢN QUYỀN IDEAN Ở TRONG SIDEBAR */}
+                      <span className="text-[9px] font-black mt-1 uppercase text-gray-400 tracking-widest">© {new Date().getFullYear()} by iDean</span>
                   </div>
               </div>
           </div>
@@ -1098,7 +1113,6 @@ export default function Home() {
                 <button onClick={() => setZoomLevel(p => Math.min(2, p + 0.1))} className="px-2 py-1 text-gray-600 hover:text-black hover:bg-gray-200">+</button>
             </div>
             
-            {/* NÚT CHUYỂN NGÔN NGỮ TRÊN HEADER */}
             <button onClick={() => setLang(lang === 'VI' ? 'EN' : 'VI')} className="bg-[#bfdbfe] border-2 border-black px-2 py-1 text-[10px] font-black shadow-[2px_2px_0_0_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all hidden sm:block">
                 {lang === 'VI' ? '🇻🇳 VI' : '🇬🇧 EN'}
             </button>
@@ -1399,7 +1413,6 @@ export default function Home() {
                                     <button onClick={handleAddPlayer} className="bg-[#fcd34d] border-2 border-black w-10 flex items-center justify-center font-black text-lg hover:bg-[#fbbf24]">+</button>
                                 </div>
                             </div>
-                            {/* CHỌN GIỚI TÍNH BÊN HOST - TAB NGƯỜI CHƠI */}
                             <div className="flex gap-2 max-w-[200px]">
                                 <button onClick={() => setNewPlayerGender('M')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all ${newPlayerGender === 'M' ? 'bg-blue-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-blue-600 text-sm">♂</span> {t.male}</button>
                                 <button onClick={() => setNewPlayerGender('F')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all ${newPlayerGender === 'F' ? 'bg-pink-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-pink-500 text-sm">♀</span> {t.female}</button>
@@ -1554,7 +1567,6 @@ export default function Home() {
                               <label className="text-[10px] font-black uppercase mb-1 block">{t.sortName}</label>
                               <input type="text" className="w-full border-2 border-black p-1.5 text-xs font-bold focus:outline-none focus:border-[3px] mb-2" placeholder={t.playerNamePlaceholder} value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPlayer()} />
                               
-                              {/* CHỌN GIỚI TÍNH BÊN HOST - TAB CÀI ĐẶT */}
                               <div className="flex gap-2 mb-2">
                                   <button onClick={() => setNewPlayerGender('M')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all flex justify-center items-center gap-1 ${newPlayerGender === 'M' ? 'bg-blue-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-blue-600 text-sm">♂</span> {t.male}</button>
                                   <button onClick={() => setNewPlayerGender('F')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all flex justify-center items-center gap-1 ${newPlayerGender === 'F' ? 'bg-pink-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-pink-500 text-sm">♀</span> {t.female}</button>
