@@ -7,11 +7,13 @@ type SkillLevel = 'Mới chơi' | 'Yếu-' | 'Yếu' | 'Yếu+' | 'Trung bình-'
 type ShuffleMode = 'Equal Rotation' | 'Skill Based' | 'Social Mix' | 'Fixed Pairs' | 'Manual';
 type PlayerStatus = 'waiting' | 'playing' | 'break';
 type UserRole = 'host' | 'guest';
+type Gender = 'M' | 'F';
 
 interface Player {
   id: string;
   name: string;
   skill: SkillLevel;
+  gender?: Gender; 
   playCount: number;
   wins: number;
   status: PlayerStatus;
@@ -105,6 +107,9 @@ const dict = {
     trackResults: "Ghi nhận điểm số (Thắng/Thua)",
     applyChanges: "LƯU TRÊN CLOUD",
     addPlayersMenu: "THÊM NGƯỜI CHƠI",
+    genderLabel: "Giới tính",
+    male: "Nam",
+    female: "Nữ",
     resetCountsTitle: "ĐẶT LẠI SỐ TRẬN?",
     resetCountsDesc: "Bắt đầu phiên mới bằng cách đặt lại số trận, thứ tự chờ và lịch sử ghép cặp. Các sân sẽ bị xóa và bộ đếm thời gian dừng lại. Thành viên, cặp cố định, trạng thái nghỉ, cài đặt sân và kết quả đã lưu sẽ được giữ nguyên.",
     resetCountsBtn: "Đặt lại số trận",
@@ -170,7 +175,7 @@ const dict = {
       shareDesc: "Gửi link app này cho bạn bè",
       terms: "Điều khoản dịch vụ",
       privacy: "Chính sách bảo mật",
-      version: "Phiên bản 2.8 (Shuttlecock Animation)"
+      version: "Phiên bản 2.9 (Gender Identity)"
     }
   },
   EN: {
@@ -238,6 +243,9 @@ const dict = {
     trackResults: "Track Match Results (Win/Loss)",
     applyChanges: "SAVE TO CLOUD",
     addPlayersMenu: "ADD PLAYERS",
+    genderLabel: "Gender",
+    male: "Male",
+    female: "Female",
     resetCountsTitle: "RESET GAME COUNTS?",
     resetCountsDesc: "Start a new session by resetting game counts, waiting order, and pairing history. Courts will be cleared and the timer stopped. Members, fixed pairs, break status, court settings, and recorded results will be kept.",
     resetCountsBtn: "Reset game counts",
@@ -303,7 +311,7 @@ const dict = {
       shareDesc: "Send this app link to friends",
       terms: "Terms of Service",
       privacy: "Privacy Policy",
-      version: "Version 2.8 (Shuttlecock Animation)"
+      version: "Version 2.9 (Gender Identity)"
     }
   }
 };
@@ -322,7 +330,12 @@ const generateUUID = () => {
     });
 }
 
-// 🎨 COMPONENT QUẢ CẦU LÔNG VẼ BẰNG SVG SIÊU NÉT 🎨
+// Helper render Logo Giới tính
+const renderGenderIcon = (gender?: Gender) => {
+    if (gender === 'F') return <span className="text-pink-500 font-black ml-1 drop-shadow-[1px_1px_0_#fff]">♀</span>;
+    return <span className="text-blue-500 font-black ml-1 drop-shadow-[1px_1px_0_#fff]">♂</span>; // Mặc định là Nam cho an toàn
+};
+
 const ShuttlecockIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: 'drop-shadow(3px 3px 0px rgba(0,0,0,1))' }}>
     <path d="M10 14L5 3L8 4L11 13" fill="white" stroke="black" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -349,6 +362,7 @@ export default function Home() {
   const [roomPin, setRoomPin] = useState<string>("");
   const [guestName, setGuestName] = useState("");
   const [guestSkill, setGuestSkill] = useState<SkillLevel>("Trung bình");
+  const [guestGender, setGuestGender] = useState<Gender>('M');
 
   // View States
   const [zoomLevel, setZoomLevel] = useState<number>(1);
@@ -372,6 +386,8 @@ export default function Home() {
 
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerSkill, setNewPlayerSkill] = useState<SkillLevel>("Trung bình");
+  const [newPlayerGender, setNewPlayerGender] = useState<Gender>('M');
+
   const [playerFilter, setPlayerFilter] = useState<"all" | "waiting" | "playing" | "break">("all");
   const [sortOption, setSortOption] = useState<"status" | "name" | "games">("status");
   const [isWeightsExpanded, setIsWeightsExpanded] = useState(true);
@@ -456,7 +472,6 @@ export default function Home() {
     return () => { supabase.removeChannel(channel); };
   }, [roomPin, currentScreen, userRole, isHostInitialized]);
 
-  // HÀM ĐẨY DATA LÊN SUPABASE
   const syncData = async (newPlayers: Player[], newCourts: Court[], newSettings?: GameSettings) => {
       if (!roomPin) return;
       try {
@@ -498,7 +513,7 @@ export default function Home() {
         if (error || !roomData) { alert("Mã phòng không tồn tại hoặc đã bị đóng!"); return; }
 
         const { data: authData } = await supabase.auth.signInAnonymously();
-        const newGuest: Player = { id: authData?.user?.id || generateUUID(), name: guestName.trim(), skill: guestSkill, playCount: 0, wins: 0, status: 'waiting' };
+        const newGuest: Player = { id: authData?.user?.id || generateUUID(), name: guestName.trim(), skill: guestSkill, gender: guestGender, playCount: 0, wins: 0, status: 'waiting' };
         
         const newPlayers = [...(roomData.players || []), newGuest];
         await supabase.from('rooms').update({ players: newPlayers }).eq('id', roomPin.trim());
@@ -545,14 +560,14 @@ export default function Home() {
   // --- CÁC HÀM XỬ LÝ (HOST) ---
   const handleAddPlayer = () => {
     if (newPlayerName.trim() === "") return;
-    const newPlayer: Player = { id: generateUUID(), name: newPlayerName.trim(), skill: newPlayerSkill, playCount: 0, wins: 0, status: 'waiting' };
+    const newPlayer: Player = { id: generateUUID(), name: newPlayerName.trim(), skill: newPlayerSkill, gender: newPlayerGender, playCount: 0, wins: 0, status: 'waiting' };
     syncData([...players, newPlayer], courts);
     setNewPlayerName("");
   };
 
   const handleAddGuests = () => {
     const guests = Array.from({ length: 8 }, (_, i) => ({
-      id: generateUUID(), name: `${t.guestPrefix} ${players.length + i + 1}`, skill: 'Trung bình' as SkillLevel, playCount: 0, wins: 0, status: 'waiting' as PlayerStatus
+      id: generateUUID(), name: `${t.guestPrefix} ${players.length + i + 1}`, skill: 'Trung bình' as SkillLevel, gender: (i % 2 === 0 ? 'M' : 'F') as Gender, playCount: 0, wins: 0, status: 'waiting' as PlayerStatus
     }));
     syncData([...players, ...guests], courts);
   };
@@ -932,7 +947,7 @@ export default function Home() {
          <button onClick={() => setLang(lang === 'VI' ? 'EN' : 'VI')} className="absolute top-4 right-4 z-50 bg-[#bfdbfe] border-[3px] border-black px-3 py-1 text-sm font-black shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] transition-all">
             {lang === 'VI' ? '🇻🇳 VI' : '🇬🇧 EN'}
          </button>
-         <div className="bg-white border-[4px] border-black p-6 shadow-[8px_8px_0_0_#000] max-w-sm w-full mx-4 flex flex-col gap-5">
+         <div className="bg-white border-[4px] border-black p-6 shadow-[8px_8px_0_0_#000] max-w-sm w-full mx-4 flex flex-col gap-4">
             <h2 className="font-black text-xl uppercase text-center border-b-4 border-yellow-400 pb-2">{t.joinMatch}</h2>
             
             <div>
@@ -942,12 +957,18 @@ export default function Home() {
 
             <div>
                 <label className="text-[11px] font-black uppercase mb-1 block">{t.yourNameLabel}</label>
-                <input type="text" placeholder={t.namePlaceholder} className="w-full border-[3px] border-black p-3 text-sm font-bold focus:outline-none focus:bg-yellow-50" value={guestName} onChange={e => setGuestName(e.target.value)} />
+                <input type="text" placeholder={t.namePlaceholder} className="w-full border-[3px] border-black p-2 text-sm font-bold focus:outline-none focus:bg-yellow-50 mb-2" value={guestName} onChange={e => setGuestName(e.target.value)} />
+                
+                {/* CHỌN GIỚI TÍNH BÊN KHÁCH */}
+                <div className="flex gap-2">
+                    <button onClick={() => setGuestGender('M')} className={`flex-1 border-[3px] border-black py-1.5 text-xs font-black uppercase transition-all flex items-center justify-center gap-1 ${guestGender === 'M' ? 'bg-blue-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-blue-600 text-sm">♂</span> {t.male}</button>
+                    <button onClick={() => setGuestGender('F')} className={`flex-1 border-[3px] border-black py-1.5 text-xs font-black uppercase transition-all flex items-center justify-center gap-1 ${guestGender === 'F' ? 'bg-pink-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-pink-500 text-sm">♀</span> {t.female}</button>
+                </div>
             </div>
 
             <div>
                 <label className="text-[11px] font-black uppercase mb-1 block">{t.skillLabel}</label>
-                <select className="w-full border-[3px] border-black p-3 text-sm font-bold cursor-pointer bg-white" value={guestSkill} onChange={e => setGuestSkill(e.target.value as SkillLevel)}>
+                <select className="w-full border-[3px] border-black p-2 text-sm font-bold cursor-pointer bg-white" value={guestSkill} onChange={e => setGuestSkill(e.target.value as SkillLevel)}>
                     {ALL_SKILLS.map(s => <option key={s} value={s}>{tSkill(s)}</option>)}
                 </select>
             </div>
@@ -1149,7 +1170,7 @@ export default function Home() {
                                           <div className="text-[9px] font-bold text-gray-500">{t.draftSelected} ({court.players.length}/{neededPlayers}):</div>
                                           <div className="flex flex-wrap gap-1">
                                               {court.players.map(p => (
-                                                  <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-[#3b82f6] text-white border-2 border-black px-2 py-1 text-[10px] font-bold cursor-pointer hover:bg-red-500 hover:line-through transition-colors flex items-center gap-1 shadow-[1px_1px_0_0_#000]">{p.name} <i className="fa-solid fa-xmark text-[8px]"></i></span>
+                                                  <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-[#3b82f6] text-white border-2 border-black px-2 py-1 text-[10px] font-bold cursor-pointer hover:bg-red-500 hover:line-through transition-colors flex items-center gap-1 shadow-[1px_1px_0_0_#000]">{p.name} {renderGenderIcon(p.gender)} <i className="fa-solid fa-xmark text-[8px] ml-1"></i></span>
                                               ))}
                                           </div>
                                       </div>
@@ -1158,7 +1179,7 @@ export default function Home() {
                                            <div className="text-[9px] font-bold text-gray-500 mb-1.5">{t.draftWaiting}:</div>
                                            <div className="flex flex-wrap gap-1.5">
                                                {players.filter(p => p.status === 'waiting' && !court.players.some(cp => cp.id === p.id)).map(p => (
-                                                   <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-white border-2 border-black px-2 py-1 text-[10px] font-bold cursor-pointer hover:bg-green-300 transition-colors shadow-[1px_1px_0_0_#000]">{p.name}</span>
+                                                   <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-white border-2 border-black px-2 py-1 text-[10px] font-bold cursor-pointer hover:bg-green-300 transition-colors shadow-[1px_1px_0_0_#000]">{p.name} {renderGenderIcon(p.gender)}</span>
                                                ))}
                                            </div>
                                       </div>
@@ -1180,7 +1201,7 @@ export default function Home() {
                                       <div className="flex-1 flex flex-col items-center justify-center relative bg-blue-400/80 mx-1 mt-1 mb-0.5 border-[2px] border-black shadow-[2px_2px_0_0_rgba(0,0,0,0.5)]">
                                         <span className="absolute top-1 left-2 text-[9px] font-black text-white text-stroke-1">{t.team1Label}</span>
                                         <div className={`w-full grid ${topCount === 2 ? 'grid-cols-2' : 'grid-cols-1'} items-center justify-items-center z-10 px-2 gap-2`}>
-                                            {court.players.slice(0, topCount).map(p => (<div key={p.id} className="bg-white border-2 border-blue-900 px-1 py-1.5 w-full max-w-[100px] text-center truncate font-black text-[12px] text-blue-900 shadow-[2px_2px_0_0_#1e3a8a]">{p.name}</div>))}
+                                            {court.players.slice(0, topCount).map(p => (<div key={p.id} className="bg-white border-2 border-blue-900 px-1 py-1.5 w-full max-w-[100px] text-center truncate font-black text-[12px] text-blue-900 shadow-[2px_2px_0_0_#1e3a8a]">{p.name} {renderGenderIcon(p.gender)}</div>))}
                                         </div>
                                       </div>
 
@@ -1206,7 +1227,7 @@ export default function Home() {
                                       <div className="flex-1 flex flex-col items-center justify-center relative bg-red-400/80 mx-1 mt-0.5 mb-1 border-[2px] border-black shadow-[2px_2px_0_0_rgba(0,0,0,0.5)]">
                                         <span className="absolute bottom-1 right-2 text-[9px] font-black text-white text-stroke-1">{t.team2Label}</span>
                                         <div className={`w-full grid ${bottomCount === 2 ? 'grid-cols-2' : 'grid-cols-1'} items-center justify-items-center z-10 px-2 gap-2`}>
-                                            {court.players.slice(topCount, topCount + bottomCount).map(p => (<div key={p.id} className="bg-white border-2 border-red-900 px-1 py-1.5 w-full max-w-[100px] text-center truncate font-black text-[12px] text-red-900 shadow-[2px_2px_0_0_#7f1d1d]">{p.name}</div>))}
+                                            {court.players.slice(topCount, topCount + bottomCount).map(p => (<div key={p.id} className="bg-white border-2 border-red-900 px-1 py-1.5 w-full max-w-[100px] text-center truncate font-black text-[12px] text-red-900 shadow-[2px_2px_0_0_#7f1d1d]">{p.name} {renderGenderIcon(p.gender)}</div>))}
                                         </div>
                                       </div>
                                   </div>
@@ -1267,11 +1288,11 @@ export default function Home() {
                                             {(court.status === 'active' || court.status === 'scoring') ? (
                                                 <div className="flex items-center gap-4">
                                                     <div className="font-black text-sm flex gap-2">
-                                                        {court.players.slice(0, court.matchType === '2v2' ? 2 : 1).map(p => <span key={p.id} className="bg-blue-100 text-blue-900 px-2 py-1 border-2 border-blue-600 min-w-max">{p.name}</span>)}
+                                                        {court.players.slice(0, court.matchType === '2v2' ? 2 : 1).map(p => <span key={p.id} className="bg-blue-100 text-blue-900 px-2 py-1 border-2 border-blue-600 min-w-max">{p.name} {renderGenderIcon(p.gender)}</span>)}
                                                     </div>
                                                     <span className="text-gray-400 font-black italic">VS</span>
                                                     <div className="font-black text-sm flex gap-2">
-                                                        {court.players.slice(court.matchType === '2v2' ? 2 : 1).map(p => <span key={p.id} className="bg-red-100 text-red-900 px-2 py-1 border-2 border-red-600 min-w-max">{p.name}</span>)}
+                                                        {court.players.slice(court.matchType === '2v2' ? 2 : 1).map(p => <span key={p.id} className="bg-red-100 text-red-900 px-2 py-1 border-2 border-red-600 min-w-max">{p.name} {renderGenderIcon(p.gender)}</span>)}
                                                     </div>
                                                 </div>
                                             ) : court.status === 'drafting' ? (
@@ -1279,13 +1300,13 @@ export default function Home() {
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] font-bold text-gray-500">{t.draftSelected}:</span>
                                                         <div className="flex flex-wrap gap-1">
-                                                            {court.players.map(p => <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-[#3b82f6] text-white border border-black px-1.5 py-0.5 text-[10px] font-bold cursor-pointer hover:bg-red-500 hover:line-through">{p.name}</span>)}
+                                                            {court.players.map(p => <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-[#3b82f6] text-white border border-black px-1.5 py-0.5 text-[10px] font-bold cursor-pointer hover:bg-red-500 hover:line-through">{p.name} {renderGenderIcon(p.gender)}</span>)}
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] font-bold text-gray-500">{t.draftWaiting}:</span>
                                                         <div className="flex flex-wrap gap-1 max-w-[400px]">
-                                                            {players.filter(p => p.status === 'waiting' && !court.players.some(cp => cp.id === p.id)).map(p => <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-white border border-black px-1.5 py-0.5 text-[10px] font-bold cursor-pointer hover:bg-green-200">{p.name}</span>)}
+                                                            {players.filter(p => p.status === 'waiting' && !court.players.some(cp => cp.id === p.id)).map(p => <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-white border border-black px-1.5 py-0.5 text-[10px] font-bold cursor-pointer hover:bg-green-200">{p.name} {renderGenderIcon(p.gender)}</span>)}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1368,13 +1389,20 @@ export default function Home() {
                     </div>
 
                     {userRole === 'host' && (
-                        <div className="flex flex-col md:flex-row gap-3 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
-                            <input type="text" className="neo-input text-sm flex-1 bg-white" placeholder={t.playerNamePlaceholder} value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPlayer()} />
-                            <div className="flex gap-2">
-                                <select className="neo-input text-sm bg-white cursor-pointer w-auto" value={newPlayerSkill} onChange={e => setNewPlayerSkill(e.target.value as SkillLevel)}>
-                                    {ALL_SKILLS.map(s => <option key={s} value={s}>{tSkill(s)}</option>)}
-                                </select>
-                                <button onClick={handleAddPlayer} className="bg-[#fcd34d] border-2 border-black w-8 flex items-center justify-center font-black text-lg hover:bg-[#fbbf24]">+</button>
+                        <div className="flex flex-col gap-3 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <div className="flex flex-col md:flex-row gap-2">
+                                <input type="text" className="neo-input text-sm flex-1 bg-white" placeholder={t.playerNamePlaceholder} value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPlayer()} />
+                                <div className="flex gap-2 w-full md:w-auto">
+                                    <select className="neo-input text-sm bg-white cursor-pointer w-auto flex-1 md:flex-none" value={newPlayerSkill} onChange={e => setNewPlayerSkill(e.target.value as SkillLevel)}>
+                                        {ALL_SKILLS.map(s => <option key={s} value={s}>{tSkill(s)}</option>)}
+                                    </select>
+                                    <button onClick={handleAddPlayer} className="bg-[#fcd34d] border-2 border-black w-10 flex items-center justify-center font-black text-lg hover:bg-[#fbbf24]">+</button>
+                                </div>
+                            </div>
+                            {/* CHỌN GIỚI TÍNH BÊN HOST - TAB NGƯỜI CHƠI */}
+                            <div className="flex gap-2 max-w-[200px]">
+                                <button onClick={() => setNewPlayerGender('M')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all ${newPlayerGender === 'M' ? 'bg-blue-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-blue-600 text-sm">♂</span> {t.male}</button>
+                                <button onClick={() => setNewPlayerGender('F')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all ${newPlayerGender === 'F' ? 'bg-pink-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-pink-500 text-sm">♀</span> {t.female}</button>
                             </div>
                         </div>
                     )}
@@ -1399,7 +1427,7 @@ export default function Home() {
                                     )}
                                 </div>
                                 <div className="font-black text-[15px] truncate mt-1 text-gray-800 flex items-center flex-wrap gap-1">
-                                    {p.name} 
+                                    {p.name} {renderGenderIcon(p.gender)}
                                     {p.status === 'playing' && <span className="text-[10px] text-green-600 ml-1 italic">({t.playing})</span>}
                                     {p.partnerId && (() => {
                                         const partner = players.find(x => x.id === p.partnerId);
@@ -1433,7 +1461,7 @@ export default function Home() {
                                         <div className="flex items-center gap-4">
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black border-2 border-black ${index === 0 ? 'bg-yellow-400' : index === 1 ? 'bg-gray-300' : index === 2 ? 'bg-[#cd7f32] text-white' : 'bg-white'}`}>{index + 1}</div>
                                             <div>
-                                                <div className="font-black text-sm">{p.name}</div>
+                                                <div className="font-black text-sm flex items-center">{p.name} {renderGenderIcon(p.gender)}</div>
                                                 <div className="text-[10px] uppercase font-bold text-gray-500">{tSkill(p.skill)}</div>
                                             </div>
                                         </div>
@@ -1524,8 +1552,15 @@ export default function Home() {
                       <div className="p-4 space-y-4">
                           <div>
                               <label className="text-[10px] font-black uppercase mb-1 block">{t.sortName}</label>
-                              <input type="text" className="w-full border-2 border-black p-1.5 text-xs font-bold focus:outline-none focus:border-[3px]" placeholder={t.playerNamePlaceholder} value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPlayer()} />
+                              <input type="text" className="w-full border-2 border-black p-1.5 text-xs font-bold focus:outline-none focus:border-[3px] mb-2" placeholder={t.playerNamePlaceholder} value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPlayer()} />
+                              
+                              {/* CHỌN GIỚI TÍNH BÊN HOST - TAB CÀI ĐẶT */}
+                              <div className="flex gap-2 mb-2">
+                                  <button onClick={() => setNewPlayerGender('M')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all flex justify-center items-center gap-1 ${newPlayerGender === 'M' ? 'bg-blue-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-blue-600 text-sm">♂</span> {t.male}</button>
+                                  <button onClick={() => setNewPlayerGender('F')} className={`flex-1 border-[3px] border-black p-1.5 text-xs font-black uppercase transition-all flex justify-center items-center gap-1 ${newPlayerGender === 'F' ? 'bg-pink-300 shadow-[2px_2px_0_0_#000]' : 'bg-gray-100 hover:bg-gray-200'}`}><span className="text-pink-500 text-sm">♀</span> {t.female}</button>
+                              </div>
                           </div>
+
                           <div className="flex gap-2">
                               <select className="flex-1 border-2 border-black p-1.5 text-xs font-bold bg-white cursor-pointer" value={newPlayerSkill} onChange={e => setNewPlayerSkill(e.target.value as SkillLevel)}>
                                   {ALL_SKILLS.map(s => <option key={s} value={s}>{tSkill(s)}</option>)}
@@ -1545,7 +1580,7 @@ export default function Home() {
                                                   <span className="bg-[#fcd34d] text-[8px] font-black px-1 border border-black rounded-[2px]">{tSkill(p.skill)}</span>
                                                   <span className="bg-gray-100 text-gray-500 text-[8px] font-black px-1 border border-gray-300 rounded-[2px]">{p.playCount}G</span>
                                               </div>
-                                              <span className="font-black text-[11px] truncate max-w-[140px]">{p.name}</span>
+                                              <span className="font-black text-[11px] truncate max-w-[140px]">{p.name} {renderGenderIcon(p.gender)}</span>
                                           </div>
                                           <div className="flex gap-2.5 text-gray-300 pr-1">
                                               <i className="fa-regular fa-trash-can hover:text-red-500 cursor-pointer text-[10px]" onClick={() => handleRemovePlayer(p.id)}></i>
