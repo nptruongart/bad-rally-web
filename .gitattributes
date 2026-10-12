@@ -1,0 +1,5 @@
+# File chạy trên VPS Linux: luôn giữ xuống dòng LF (git trên Windows với core.autocrlf=true sẽ đổi sang CRLF)
+*.sh text eol=lf
+*.service text eol=lf
+deploy/Caddyfile text eol=lf
+pocketbase/pb_migrations/*.js text eol=lf
