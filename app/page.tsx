@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { ClientResponseError, RecordModel, UnsubscribeFunc } from "pocketbase";
 import { Preferences } from '@capacitor/preferences'; // Bộ nhớ chuẩn Native App
-import { pb, ensureAuth, roomIdFromPin, PUBLIC_APP_URL } from "../lib/pb";
+import { pb, ensureAuth, roomIdFromPin, PUBLIC_APP_URL, isHostAccount, redeemHostCode } from "../lib/pb";
 import QrCode from "./QrCode";
 import { pickMatch, genderOf, effectiveCategory, fitsCategory, teamFitsCategory, type MatchRecord, type MatchCategory } from "../lib/matchmaking";
 
@@ -137,6 +137,9 @@ const dict = {
     alertNotEnoughPlayers: "Không đủ {n} người chờ để xếp trận {type}! (Đang có {m} người rảnh)",
     alertNeedPlayers: "Vui lòng chọn đủ {n} người chơi!",
     alertNeedName: "Vui lòng nhập tên hiển thị!",
+    hostGranted: "Máy này đã được cấp quyền Chủ sân! Giờ bạn có thể tạo phòng.",
+    hostRedeemError: "Không kích hoạt được quyền chủ sân",
+    noHostPermission: "Máy này chưa có quyền tạo phòng. Hãy xin người quản lý mã QR chủ sân.",
     categories: { any: "Tự do", MD: "Đôi nam", WD: "Đôi nữ", XD: "Nam nữ" } as Record<MatchCategory, string>,
     categoryNeed: { any: "4 người", MD: "4 nam", WD: "4 nữ", XD: "2 nam + 2 nữ" } as Record<MatchCategory, string>,
     alertCategoryNotEnough: "Không đủ người cho trận {cat}! (cần {need}, đang chờ: {m} nam, {f} nữ)",
@@ -290,6 +293,9 @@ const dict = {
     alertNotEnoughPlayers: "Not enough {n} waiting players for {type} match! ({m} available)",
     alertNeedPlayers: "Please select {n} players!",
     alertNeedName: "Please enter your display name!",
+    hostGranted: "This device now has Host access! You can create rooms.",
+    hostRedeemError: "Could not activate host access",
+    noHostPermission: "This device cannot create rooms yet. Ask the organizer for the host QR code.",
     categories: { any: "Open", MD: "Men's", WD: "Women's", XD: "Mixed" } as Record<MatchCategory, string>,
     categoryNeed: { any: "4 players", MD: "4 men", WD: "4 women", XD: "2 men + 2 women" } as Record<MatchCategory, string>,
     alertCategoryNotEnough: "Not enough players for a {cat} match! (need {need}, waiting: {m} men, {f} women)",
@@ -441,6 +447,8 @@ export default function Home() {
   const [guestSkill, setGuestSkill] = useState<SkillLevel>("Trung bình");
   const [guestGender, setGuestGender] = useState<Gender>('M');
   const [isBusy, setIsBusy] = useState(false);
+  // Máy được cấp quyền chủ sân (qua link/QR chủ sân) mới thấy nút Tạo phòng
+  const [canHost, setCanHost] = useState(false);
 
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -486,13 +494,23 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") {
         // Khách mở link từ QR (?pin=123456) → điền sẵn PIN và vào màn hình tham gia
-        const urlPin = new URLSearchParams(window.location.search).get('pin')?.trim();
-        if (urlPin) window.history.replaceState(null, '', window.location.pathname);
+        const params = new URLSearchParams(window.location.search);
+        const urlPin = params.get('pin')?.trim();
+        const hostCode = params.get('host')?.trim();
+        if (urlPin || hostCode) window.history.replaceState(null, '', window.location.pathname);
+
+        // Mở link/QR chủ sân (?host=MÃ) → cấp quyền chủ sân cho máy này
+        if (hostCode) {
+            redeemHostCode(hostCode)
+                .then(() => { setCanHost(true); setCurrentScreen('role_select'); alert(dict.VI.hostGranted); })
+                .catch((e: ClientResponseError) => alert(dict.VI.hostRedeemError + (e?.response?.message ? ': ' + e.response.message : '')));
+        }
 
         const initSession = async () => {
             try {
                 const { value } = await Preferences.get({ key: 'badRallySession' });
                 const saved = value ? JSON.parse(value) : null;
+                setCanHost(isHostAccount());
                 if (urlPin && /^\d{6}$/.test(urlPin) && saved?.pin !== urlPin) {
                     setRoomPin(urlPin);
                     setCurrentScreen('guest_join');
@@ -621,6 +639,7 @@ export default function Home() {
     setIsBusy(true);
     try {
         const uid = await ensureAuth();
+        if (!isHostAccount()) { setCanHost(false); setCurrentScreen('guest_join'); alert(t.noHostPermission); return; }
         const initialCourts: CourtData[] = Array.from({ length: settings.totalCourts }, (_, i) => ({ id: i + 1, status: 'available', playerIds: [], matchType: '2v2' }));
         let pin = "";
         for (let attempt = 0; attempt < 5 && !pin; attempt++) {
@@ -1061,7 +1080,7 @@ export default function Home() {
           <div className="bg-white border-[3px] border-black shadow-[6px_6px_0_0_#000] p-5 max-w-sm mx-auto mb-8 relative">
               <p className="font-bold text-sm leading-relaxed" dangerouslySetInnerHTML={{__html: t.desc}}></p>
           </div>
-          <button onClick={() => setCurrentScreen("role_select")} className="bg-yellow-400 border-[3px] border-black text-lg font-black uppercase tracking-widest py-4 px-12 shadow-[6px_6px_0_0_#000] hover:bg-yellow-300 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
+          <button onClick={() => setCurrentScreen(canHost ? "role_select" : "guest_join")} className="bg-yellow-400 border-[3px] border-black text-lg font-black uppercase tracking-widest py-4 px-12 shadow-[6px_6px_0_0_#000] hover:bg-yellow-300 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
               {t.startBtn} ➔
           </button>
         </div>
@@ -1175,7 +1194,7 @@ export default function Home() {
             </div>
 
             <button onClick={handleJoinRoom} className="w-full bg-[#3b82f6] text-white border-[3px] border-black py-4 text-sm font-black uppercase shadow-[4px_4px_0_0_#000] hover:bg-blue-600 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all mt-2">{t.joinBtn}</button>
-            <button onClick={() => setCurrentScreen('role_select')} className="text-gray-400 font-bold hover:text-black text-sm text-center mt-2">{t.cancelBtn}</button>
+            <button onClick={() => setCurrentScreen(canHost ? 'role_select' : 'launcher')} className="text-gray-400 font-bold hover:text-black text-sm text-center mt-2">{t.cancelBtn}</button>
          </div>
       </div>
     );

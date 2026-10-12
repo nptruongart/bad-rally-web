@@ -3,3 +3,4 @@
 *.service text eol=lf
 deploy/Caddyfile text eol=lf
 pocketbase/pb_migrations/*.js text eol=lf
+pocketbase/pb_hooks/*.js text eol=lf

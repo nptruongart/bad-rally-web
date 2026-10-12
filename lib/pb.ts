@@ -53,3 +53,13 @@ async function doAuth(): Promise<string> {
   const auth = await pb.collection('users').authWithPassword(email, password);
   return auth.record.id;
 }
+
+// Máy này đã được cấp quyền chủ sân chưa (theo phiên đăng nhập đã lưu; server vẫn kiểm tra lại khi tạo phòng)
+export const isHostAccount = () => !!pb.authStore.record?.is_host;
+
+// Đổi mã mời chủ sân (từ link/QR chủ sân) lấy quyền tạo phòng cho máy này
+export async function redeemHostCode(code: string): Promise<void> {
+  await ensureAuth();
+  await pb.send('/api/badrally/redeem-host', { method: 'POST', body: { code } });
+  await pb.collection('users').authRefresh();
+}

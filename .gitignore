@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Mã QR / link chủ sân (bí mật, không đưa lên git)
+/private/
