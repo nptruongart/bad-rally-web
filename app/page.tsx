@@ -1,7 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
-import { supabase } from "../supabase";
+import { useState, useEffect, useRef } from "react";
+import type { ClientResponseError, RecordModel, UnsubscribeFunc } from "pocketbase";
 import { Preferences } from '@capacitor/preferences'; // Bộ nhớ chuẩn Native App
+import { pb, ensureAuth, roomIdFromPin, PUBLIC_APP_URL } from "../lib/pb";
+import QrCode from "./QrCode";
+import { pickMatch, type MatchRecord } from "../lib/matchmaking";
 
 // --- CÁC KIỂU DỮ LIỆU ---
 type SkillLevel = 'Mới chơi' | 'Yếu-' | 'Yếu' | 'Yếu+' | 'Trung bình-' | 'Trung bình' | 'Trung bình+' | 'Khá-' | 'Khá' | 'Khá+';
@@ -18,7 +21,9 @@ interface Player {
   playCount: number;
   wins: number;
   status: PlayerStatus;
-  partnerId?: string; 
+  partnerId?: string;
+  waitSince?: number; // thời điểm bắt đầu chờ (ms)
+  userId?: string;    // tài khoản của khách tự đăng ký (trống nếu chủ sân thêm tay)
 }
 
 interface GameSettings {
@@ -34,11 +39,16 @@ interface GameSettings {
   };
 }
 
-interface Court {
+// Lưu trong rooms.courts: chỉ giữ id người chơi (không chép cả object để tránh dữ liệu cũ)
+interface CourtData {
   id: number;
-  status: 'available' | 'drafting' | 'active' | 'scoring'; 
-  players: Player[];
+  status: 'available' | 'drafting' | 'active' | 'scoring';
+  playerIds: string[];
   matchType: '1v1' | '1v2' | '2v2';
+}
+
+interface Court extends CourtData {
+  players: Player[];
 }
 
 // --- TỪ ĐIỂN ĐA NGÔN NGỮ ---
@@ -102,11 +112,17 @@ const dict = {
     courtsTxt: "sân",
     shuffleMode: "Chế độ trộn",
     shuffleModes: { "Equal Rotation": "Xoay vòng đều", "Skill Based": "Dựa trên kỹ năng", "Social Mix": "Trộn xã hội", "Fixed Pairs": "Cặp cố định", "Manual": "Thủ công" },
-    shuffleDesc: "Ưu tiên sự công bằng về số trận và thời gian chờ.",
+    shuffleDescs: {
+      "Equal Rotation": "Ưu tiên công bằng số trận và thời gian chờ, hạn chế trùng đồng đội.",
+      "Skill Based": "Chia đội cân sức theo trình độ, tránh trùng đồng đội và đối thủ.",
+      "Social Mix": "Ưu tiên gặp gỡ nhiều người: hạn chế tối đa trùng đồng đội và đối thủ.",
+      "Fixed Pairs": "Giữ nguyên đồng đội của trận trước, đổi đối thủ liên tục.",
+      "Manual": "Tự chỉnh từng trọng số bên dưới (0 = bỏ qua, 100 = ưu tiên cao nhất).",
+    },
     shuffleWeights: "Trọng số xếp trận",
     weights: { playCountFairness: "Công bằng số trận", waitTimePriority: "Ưu tiên thời gian chờ", avoidSamePartner: "Tránh trùng đồng đội", avoidSameOpponents: "Tránh trùng đối thủ", skillBalance: "Cân bằng kỹ năng", keepPreviousPair: "Giữ cặp trận trước" },
     trackResults: "Ghi nhận điểm số (Thắng/Thua)",
-    applyChanges: "LƯU TRÊN CLOUD",
+    applyChanges: "LƯU CÀI ĐẶT",
     addPlayersMenu: "THÊM NGƯỜI CHƠI",
     genderLabel: "Giới tính",
     male: "Nam",
@@ -119,6 +135,13 @@ const dict = {
     alertCourtFull: "Đang full sân!",
     alertNotEnoughPlayers: "Không đủ {n} người chờ để xếp trận {type}! (Đang có {m} người rảnh)",
     alertNeedPlayers: "Vui lòng chọn đủ {n} người chơi!",
+    alertNeedName: "Vui lòng nhập tên hiển thị!",
+    alertInvalidPin: "Mã phòng gồm 6 chữ số!",
+    alertRoomNotFound: "Mã phòng không tồn tại hoặc đã bị đóng!",
+    createRoomError: "Lỗi tạo phòng! Kiểm tra kết nối mạng rồi thử lại.",
+    joinRoomError: "Lỗi tham gia phòng",
+    syncError: "Không lưu được thay đổi (mất mạng?). Dữ liệu sẽ được tải lại.",
+    settingsSaved: "Đã lưu cài đặt!",
     confirmDeleteAll: "Bạn có chắc muốn xóa tất cả người chơi?",
     confirmResetCounts: "Đặt lại tất cả số trận?",
     confirmResetEvent: "Đóng phòng và xóa toàn bộ dữ liệu trên Cloud?",
@@ -176,7 +199,7 @@ const dict = {
       shareDesc: "Gửi link app này cho bạn bè",
       terms: "Điều khoản dịch vụ",
       privacy: "Chính sách bảo mật",
-      version: "Phiên bản 3.1 (Native Android)"
+      version: "Phiên bản 3.2"
     }
   },
   EN: {
@@ -238,11 +261,17 @@ const dict = {
     courtsTxt: "courts",
     shuffleMode: "Shuffle Mode",
     shuffleModes: { "Equal Rotation": "Equal Rotation", "Skill Based": "Skill Based", "Social Mix": "Social Mix", "Fixed Pairs": "Fixed Pairs", "Manual": "Manual" },
-    shuffleDesc: "Prioritizes fairness in play counts and wait times.",
+    shuffleDescs: {
+      "Equal Rotation": "Prioritizes fair game counts and wait times, limits repeat partners.",
+      "Skill Based": "Balances teams by skill level, avoids repeat partners and opponents.",
+      "Social Mix": "Maximizes mixing: strongly avoids repeat partners and opponents.",
+      "Fixed Pairs": "Keeps partners from the previous game, rotates opponents.",
+      "Manual": "Tune each weight below (0 = ignore, 100 = highest priority).",
+    },
     shuffleWeights: "Shuffle Weights",
     weights: { playCountFairness: "Play count fairness", waitTimePriority: "Wait time priority", avoidSamePartner: "Avoid same partner", avoidSameOpponents: "Avoid same opponents", skillBalance: "Skill balance", keepPreviousPair: "Keep previous pair" },
     trackResults: "Track Match Results (Win/Loss)",
-    applyChanges: "SAVE TO CLOUD",
+    applyChanges: "SAVE SETTINGS",
     addPlayersMenu: "ADD PLAYERS",
     genderLabel: "Gender",
     male: "Male",
@@ -255,6 +284,13 @@ const dict = {
     alertCourtFull: "Courts are full!",
     alertNotEnoughPlayers: "Not enough {n} waiting players for {type} match! ({m} available)",
     alertNeedPlayers: "Please select {n} players!",
+    alertNeedName: "Please enter your display name!",
+    alertInvalidPin: "Room PIN must be 6 digits!",
+    alertRoomNotFound: "Room not found or already closed!",
+    createRoomError: "Could not create room! Check your connection and try again.",
+    joinRoomError: "Could not join room",
+    syncError: "Could not save changes (offline?). Data will be reloaded.",
+    settingsSaved: "Settings saved!",
     confirmDeleteAll: "Are you sure you want to delete all players?",
     confirmResetCounts: "Reset all game counts?",
     confirmResetEvent: "Close room and wipe all cloud data?",
@@ -312,7 +348,7 @@ const dict = {
       shareDesc: "Send this app link to friends",
       terms: "Terms of Service",
       privacy: "Privacy Policy",
-      version: "Version 3.1 (Native Android)"
+      version: "Version 3.2"
     }
   }
 };
@@ -324,12 +360,45 @@ const skillEnMap: Record<SkillLevel, string> = {
 };
 const ALL_SKILLS: SkillLevel[] = ['Mới chơi', 'Yếu-', 'Yếu', 'Yếu+', 'Trung bình-', 'Trung bình', 'Trung bình+', 'Khá-', 'Khá', 'Khá+'];
 
-const generateUUID = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
+// Thời điểm hiện tại (ms) — chỉ gọi trong hàm xử lý sự kiện, không gọi khi render
+const nowMs = () => Date.now();
+
+const DEFAULT_SETTINGS: GameSettings = {
+  eventName: "Saturday Training",
+  totalCourts: 4,
+  layoutCols: 2,
+  layoutRows: 2,
+  shuffleMode: "Manual",
+  trackMatchResults: true,
+  weights: { playCountFairness: 100, waitTimePriority: 80, avoidSamePartner: 70, avoidSameOpponents: 55, skillBalance: 0, keepPreviousPair: 0 }
+};
+
+// Bản ghi PocketBase ⇄ Player
+const toPlayer = (r: RecordModel): Player => ({
+  id: r.id,
+  name: r.name,
+  skill: (ALL_SKILLS.includes(r.skill) ? r.skill : 'Trung bình') as SkillLevel,
+  gender: r.gender || undefined,
+  playCount: r.play_count || 0,
+  wins: r.wins || 0,
+  status: r.status as PlayerStatus,
+  partnerId: r.partner || undefined,
+  waitSince: r.wait_since || 0,
+  userId: r.user || undefined,
+});
+
+const toFields = (p: Partial<Player>) => {
+  const f: Record<string, unknown> = {};
+  if ('name' in p) f.name = p.name;
+  if ('skill' in p) f.skill = p.skill;
+  if ('gender' in p) f.gender = p.gender ?? '';
+  if ('playCount' in p) f.play_count = p.playCount;
+  if ('wins' in p) f.wins = p.wins;
+  if ('status' in p) f.status = p.status;
+  if ('partnerId' in p) f.partner = p.partnerId ?? '';
+  if ('waitSince' in p) f.wait_since = p.waitSince;
+  return f;
+};
 
 const renderGenderIcon = (gender?: Gender) => {
     if (gender === 'F') return <span className="text-pink-500 font-black ml-1 drop-shadow-[1px_1px_0_#fff]">♀</span>;
@@ -352,9 +421,9 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"courts" | "ranking" | "players" | "settings">("courts");
 
   const [lang, setLang] = useState<"VI" | "EN">("VI");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
-  
-  const t = dict[lang]; 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const t = dict[lang];
   const tSkill = (s: SkillLevel) => lang === "VI" ? s : skillEnMap[s];
 
   const [userRole, setUserRole] = useState<UserRole>('host');
@@ -362,21 +431,20 @@ export default function Home() {
   const [guestName, setGuestName] = useState("");
   const [guestSkill, setGuestSkill] = useState<SkillLevel>("Trung bình");
   const [guestGender, setGuestGender] = useState<Gender>('M');
+  const [isBusy, setIsBusy] = useState(false);
 
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
   const [players, setPlayers] = useState<Player[]>([]);
-  const [courts, setCourts] = useState<Court[]>([]);
-  const [settings, setSettings] = useState<GameSettings>({
-    eventName: "Saturday Training",
-    totalCourts: 4,
-    layoutCols: 2,
-    layoutRows: 2,
-    shuffleMode: "Manual",
-    trackMatchResults: true,
-    weights: { playCountFairness: 100, waitTimePriority: 80, avoidSamePartner: 70, avoidSameOpponents: 55, skillBalance: 0, keepPreviousPair: 0 }
-  });
+  const [courtData, setCourtData] = useState<CourtData[]>([]);
+  const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS);
+
+  // Sân chỉ lưu id người chơi; ghép với danh sách người chơi mới nhất để hiển thị
+  const courts: Court[] = courtData.map(c => ({
+    ...c,
+    players: (c.playerIds || []).map(id => players.find(p => p.id === id)).filter((p): p is Player => !!p),
+  }));
 
   const [newPlayerName, setNewPlayerName] = useState("");
   const [newPlayerSkill, setNewPlayerSkill] = useState<SkillLevel>("Trung bình");
@@ -385,23 +453,44 @@ export default function Home() {
   const [playerFilter, setPlayerFilter] = useState<"all" | "waiting" | "playing" | "break">("all");
   const [sortOption, setSortOption] = useState<"status" | "name" | "games">("status");
   const [isWeightsExpanded, setIsWeightsExpanded] = useState(true);
-  const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null); 
-  const [isHostInitialized, setIsHostInitialized] = useState(false);
+  const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  
-  const [hostUrl, setHostUrl] = useState<string>("");
+
   const [isKickedModalOpen, setIsKickedModalOpen] = useState(false);
+
+  const hostSettingsLoaded = useRef(false);
+  // Bản mới nhất của dữ liệu cho các hàm xử lý (tránh đọc dữ liệu cũ khi thao tác liên tiếp nhanh)
+  const playersRef = useRef<Player[]>([]);
+  const courtRef = useRef<CourtData[]>([]);
+  const historyRef = useRef<MatchRecord[]>([]); // lịch sử trận (chỉ dùng cho thuật toán, không hiển thị)
+  const applyPlayers = (next: Player[]) => { playersRef.current = next; setPlayers(next); };
+  const applyCourts = (next: CourtData[]) => { courtRef.current = next; setCourtData(next); };
+  const writeQueue = useRef<Promise<void>>(Promise.resolve());
+  const pendingWrites = useRef(0);
+  const missedRealtime = useRef(false);
+  // Đang có lệnh ghi chưa xong → tín hiệu realtime có thể là trạng thái cũ hơn trên máy, tạm bỏ qua
+  const shouldDeferRealtime = () => { if (pendingWrites.current > 0) { missedRealtime.current = true; return true; } return false; };
+  const reloadRoomRef = useRef<() => Promise<void>>(async () => {});
+  const roomId = roomPin ? roomIdFromPin(roomPin) : "";
 
   // SỬ DỤNG CAPACITOR PREFERENCES THAY CHO LOCALSTORAGE
   useEffect(() => {
     if (typeof window !== "undefined") {
-        setHostUrl(window.location.origin);
-        
+        // Khách mở link từ QR (?pin=123456) → điền sẵn PIN và vào màn hình tham gia
+        const urlPin = new URLSearchParams(window.location.search).get('pin')?.trim();
+        if (urlPin) window.history.replaceState(null, '', window.location.pathname);
+
         const initSession = async () => {
             try {
                 const { value } = await Preferences.get({ key: 'badRallySession' });
-                if (value) {
-                    const { role, pin, screen } = JSON.parse(value);
+                const saved = value ? JSON.parse(value) : null;
+                if (urlPin && /^\d{6}$/.test(urlPin) && saved?.pin !== urlPin) {
+                    setRoomPin(urlPin);
+                    setCurrentScreen('guest_join');
+                    return;
+                }
+                if (saved) {
+                    const { role, pin, screen } = saved;
                     if (pin && role) {
                         setUserRole(role);
                         setRoomPin(pin);
@@ -422,122 +511,189 @@ export default function Home() {
       await Preferences.set({ key: 'badRallySession', value: JSON.stringify({ role, pin, screen }) });
   }
 
-  useEffect(() => {
-    setCourts(prev => {
-      if (prev.length === settings.totalCourts) return prev;
-      const newCourts = [...prev];
-      while (newCourts.length < settings.totalCourts) {
-          newCourts.push({ id: newCourts.length + 1, status: 'available', players: [], matchType: '2v2' });
-      }
-      if (newCourts.length > settings.totalCourts) newCourts.length = settings.totalCourts;
-      return newCourts;
-    });
-  }, [settings.totalCourts]);
-
+  // Tải phòng + người chơi và lắng nghe realtime
   useEffect(() => {
     if (!roomPin || currentScreen !== 'app') return;
+    const rid = roomIdFromPin(roomPin);
+    let cancelled = false;
+    const unsubs: UnsubscribeFunc[] = [];
 
-    const fetchRoom = async () => {
-        const { data, error } = await supabase.from('rooms').select('*').eq('id', roomPin).single();
-        if (data) {
-            setPlayers(data.players || []);
-            setCourts(data.courts || []);
-            if (userRole === 'guest') setSettings(data.settings || settings);
-            else if (!isHostInitialized) { setSettings(data.settings || settings); setIsHostInitialized(true); }
-        } else {
-            setIsKickedModalOpen(true);
-            await Preferences.remove({ key: 'badRallySession' });
+    const applyRoom = (room: RecordModel) => {
+        applyCourts((room.courts as CourtData[]) || []);
+        historyRef.current = (room.history as MatchRecord[]) || [];
+        if (userRole === 'guest' || !hostSettingsLoaded.current) {
+            setSettings({ ...DEFAULT_SETTINGS, ...(room.settings || {}) });
+            hostSettingsLoaded.current = true;
         }
     };
-    fetchRoom();
+    const onRoomGone = async () => {
+        if (cancelled) return;
+        setIsKickedModalOpen(true);
+        await Preferences.remove({ key: 'badRallySession' });
+    };
+    const load = async () => {
+        try {
+            await ensureAuth();
+            const [room, list] = await Promise.all([
+                pb.collection('rooms').getOne(rid),
+                pb.collection('players').getFullList({ filter: pb.filter('room = {:rid}', { rid }), sort: 'created' }),
+            ]);
+            if (cancelled) return;
+            applyRoom(room);
+            applyPlayers(list.map(toPlayer));
+        } catch (e) {
+            if ((e as ClientResponseError)?.status === 404) onRoomGone();
+            else console.error("Lỗi tải phòng:", e);
+        }
+    };
+    reloadRoomRef.current = load;
 
-    const channel = supabase.channel(`room_${roomPin}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${roomPin}` }, 
-      async (payload: any) => {
-          if (payload.eventType === 'DELETE') {
-              setIsKickedModalOpen(true);
-              await Preferences.remove({ key: 'badRallySession' });
-          } else {
-              const newData = payload.new;
-              if(newData && Object.keys(newData).length > 0) {
-                  setPlayers(newData.players || []);
-                  setCourts(newData.courts || []);
-                  if (userRole === 'guest') setSettings(newData.settings || settings);
+    (async () => {
+        try {
+            await ensureAuth();
+            unsubs.push(await pb.collection('rooms').subscribe(rid, (e) => {
+                if (e.action === 'delete') onRoomGone(); else if (!shouldDeferRealtime()) applyRoom(e.record);
+            }));
+            unsubs.push(await pb.collection('players').subscribe('*', (e) => {
+                if (shouldDeferRealtime()) return;
+                const p = toPlayer(e.record);
+                const prev = playersRef.current;
+                if (e.action === 'delete') applyPlayers(prev.filter(x => x.id !== p.id));
+                else applyPlayers(prev.some(x => x.id === p.id) ? prev.map(x => x.id === p.id ? p : x) : [...prev, p]);
+            }, { filter: pb.filter('room = {:rid}', { rid }) }));
+            // Kết nối lại (mạng chập chờn / điện thoại vừa thức dậy) → tải lại để không lỡ cập nhật
+            unsubs.push(await pb.realtime.subscribe('PB_CONNECT', () => { load(); }));
+            if (cancelled) { unsubs.forEach(u => u()); return; }
+            // Tải lần đầu SAU khi đã đăng ký realtime → không sót thay đổi xảy ra ở giữa
+            await load();
+        } catch (e) { console.error("Lỗi kết nối realtime:", e); load(); }
+    })();
+
+    return () => { cancelled = true; unsubs.forEach(u => u()); };
+  }, [roomPin, currentScreen, userRole]);
+
+  // Chủ sân ghi nhiều thay đổi trong 1 giao dịch (batch): hoặc tất cả thành công, hoặc không gì cả
+  // Ghi lần lượt theo hàng đợi: lệnh sau luôn tới server sau lệnh trước → không bị ghi đè sai thứ tự
+  const commit = (updates: Record<string, Partial<Player>>, newCourts?: CourtData[], newSettings?: GameSettings, newHistory?: MatchRecord[]) => {
+      if (userRole !== 'host' || !roomId) return;
+      const ids = Object.keys(updates);
+      applyPlayers(playersRef.current.map(p => updates[p.id] ? { ...p, ...updates[p.id] } : p));
+      if (newCourts) applyCourts(newCourts);
+      if (newHistory) historyRef.current = newHistory;
+      if (ids.length === 0 && !newCourts && !newSettings && !newHistory) return;
+      const rid = roomId;
+      pendingWrites.current++;
+      writeQueue.current = writeQueue.current.then(async () => {
+          try {
+              const batch = pb.createBatch();
+              ids.forEach(id => batch.collection('players').update(id, toFields(updates[id])));
+              if (newCourts || newSettings || newHistory) {
+                  batch.collection('rooms').update(rid, { ...(newCourts ? { courts: newCourts } : {}), ...(newSettings ? { settings: newSettings } : {}), ...(newHistory ? { history: newHistory } : {}) });
+              }
+              await batch.send();
+          } catch (e) {
+              console.error("Lỗi đồng bộ:", e);
+              alert(t.syncError);
+              missedRealtime.current = true;
+          } finally {
+              // Hết lệnh chờ → tải lại 1 lần nếu trong lúc ghi đã bỏ qua tín hiệu realtime
+              if (--pendingWrites.current === 0 && missedRealtime.current) {
+                  missedRealtime.current = false;
+                  reloadRoomRef.current();
               }
           }
-      }).subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [roomPin, currentScreen, userRole, isHostInitialized]);
-
-  const syncData = async (newPlayers: Player[], newCourts: Court[], newSettings?: GameSettings) => {
-      if (!roomPin) return;
-      try {
-          const updatePayload: any = { players: newPlayers, courts: newCourts };
-          if (newSettings) updatePayload.settings = newSettings;
-          await supabase.from('rooms').update(updatePayload).eq('id', roomPin);
-      } catch (e) { console.error("Lỗi đồng bộ Supabase:", e); }
+      });
   };
 
   const generateRoomPin = () => Math.floor(100000 + Math.random() * 900000).toString();
 
   const handleCreateRoom = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
     try {
-        const { data: authData } = await supabase.auth.signInAnonymously();
-        if (!authData?.user) throw new Error("Chưa bật Anonymous Login trong Supabase!");
-        
-        const pin = generateRoomPin();
-        const initialCourts = Array.from({length: settings.totalCourts}, (_, i) => ({ id: i + 1, status: 'available', players: [], matchType: '2v2' })) as Court[];
-        
-        await supabase.from('rooms').insert([{ id: pin, host_id: authData.user.id, settings: settings, players: [], courts: initialCourts }]);
+        const uid = await ensureAuth();
+        const initialCourts: CourtData[] = Array.from({ length: settings.totalCourts }, (_, i) => ({ id: i + 1, status: 'available', playerIds: [], matchType: '2v2' }));
+        let pin = "";
+        for (let attempt = 0; attempt < 5 && !pin; attempt++) {
+            const candidate = generateRoomPin();
+            try {
+                await pb.collection('rooms').create({ id: roomIdFromPin(candidate), pin: candidate, host: uid, settings, courts: initialCourts });
+                pin = candidate;
+            } catch (e) {
+                // Chỉ thử PIN khác khi lỗi là trùng mã phòng; lỗi khác thì báo luôn
+                const data = (e as ClientResponseError)?.response?.data || {};
+                if ((e as ClientResponseError)?.status !== 400 || !(data.id || data.pin)) throw e;
+            }
+        }
+        if (!pin) throw new Error("Không tạo được mã phòng");
 
+        hostSettingsLoaded.current = false;
         setUserRole('host');
         setRoomPin(pin);
         setCurrentScreen('host_setup');
         await saveSession('host', pin, 'host_setup');
-
-    } catch (err: any) { console.error(err); alert("Lỗi tạo phòng! Đảm bảo bạn đã bật Anonymous Login trên Supabase."); }
+    } catch (err) { console.error(err); alert(t.createRoomError); }
+    finally { setIsBusy(false); }
   };
 
   const handleJoinRoom = async () => {
-    if (guestName.trim() === "" || roomPin.trim() === "") { alert(t.alertNeedPlayers.replace('{n}', '1')); return; }
+    const pin = roomPin.trim();
+    if (guestName.trim() === "") { alert(t.alertNeedName); return; }
+    if (!/^\d{6}$/.test(pin)) { alert(t.alertInvalidPin); return; }
+    if (isBusy) return;
+    setIsBusy(true);
     try {
-        const { data: roomData, error } = await supabase.from('rooms').select('*').eq('id', roomPin.trim()).single();
-        if (error || !roomData) { alert("Mã phòng không tồn tại hoặc đã bị đóng!"); return; }
+        const uid = await ensureAuth();
+        const rid = roomIdFromPin(pin);
+        try { await pb.collection('rooms').getOne(rid); }
+        catch { alert(t.alertRoomNotFound); return; }
 
-        const { data: authData } = await supabase.auth.signInAnonymously();
-        const newGuest: Player = { id: authData?.user?.id || generateUUID(), name: guestName.trim(), skill: guestSkill, gender: guestGender, playCount: 0, wins: 0, status: 'waiting' };
-        
-        const newPlayers = [...(roomData.players || []), newGuest];
-        await supabase.from('rooms').update({ players: newPlayers }).eq('id', roomPin.trim());
-        
-        setRoomPin(roomPin.trim());
+        const profile = { name: guestName.trim(), skill: guestSkill, gender: guestGender };
+        // Vào lại phòng cũ (vd. đổi máy/tải lại trang) → cập nhật bản ghi cũ thay vì tạo trùng
+        const existing = await pb.collection('players')
+            .getFirstListItem(pb.filter('room = {:rid} && user = {:uid}', { rid, uid }))
+            .catch(() => null);
+        if (existing) {
+            // Đang đánh dở trận thì không được tự sửa hồ sơ → giữ bản ghi cũ, vẫn cho vào phòng
+            if (existing.status !== 'playing') await pb.collection('players').update(existing.id, profile);
+        }
+        else await pb.collection('players').create({ ...profile, room: rid, user: uid, status: 'waiting', wait_since: nowMs() });
+
+        setRoomPin(pin);
         setUserRole('guest');
         setCurrentScreen('app');
         setActiveTab('players');
-        await saveSession('guest', roomPin.trim(), 'app');
+        await saveSession('guest', pin, 'app');
+    } catch (err) { console.error(err); alert(t.joinRoomError + ((err as Error)?.message ? `: ${(err as Error).message}` : "")); }
+    finally { setIsBusy(false); }
+  };
 
-    } catch (err: any) { console.error(err); alert("Lỗi tham gia phòng: " + err.message); }
+  const leaveToLauncher = async () => {
+      await Preferences.remove({ key: 'badRallySession' });
+      setRoomPin("");
+      applyPlayers([]);
+      applyCourts([]);
+      setIsSidebarOpen(false);
+      setIsKickedModalOpen(false);
+      hostSettingsLoaded.current = false;
+      setCurrentScreen('launcher');
   };
 
   const handleExitRoom = async () => {
       if (userRole === 'host') {
-          const isConfirm = window.confirm(t.hostExitWarning);
-          if (!isConfirm) return; 
-          
-          if (roomPin) {
-              try { await supabase.from('rooms').delete().eq('id', roomPin); } 
+          if (!window.confirm(t.hostExitWarning)) return;
+          if (roomId) {
+              try { await pb.collection('rooms').delete(roomId); }
               catch (e) { console.error("Lỗi xóa phòng:", e); }
           }
+      } else {
+          // Khách rời phòng → tự gỡ tên khỏi danh sách (trừ khi đang đánh dở trận)
+          const me = playersRef.current.find(p => p.userId && p.userId === pb.authStore.record?.id);
+          if (me && me.status !== 'playing') {
+              try { await pb.collection('players').delete(me.id); } catch (e) { console.error(e); }
+          }
       }
-      // Native App Reload mượt mà bằng State
-      await Preferences.remove({ key: 'badRallySession' });
-      setRoomPin("");
-      setPlayers([]);
-      setCourts([]);
-      setIsSidebarOpen(false);
-      setIsHostInitialized(false);
-      setCurrentScreen('launcher');
+      await leaveToLauncher();
   };
 
   const handleGoToDashboard = async () => {
@@ -545,91 +701,111 @@ export default function Home() {
       await saveSession('host', roomPin, 'app');
   }
 
+  const handleShare = async () => {
+      const url = roomPin ? `${PUBLIC_APP_URL}/?pin=${roomPin}` : PUBLIC_APP_URL;
+      try {
+          if (navigator.share) await navigator.share({ title: 'Bad Rally', text: roomPin ? `${t.roomPinLabel} ${roomPin}` : t.tagline, url });
+          else { await navigator.clipboard.writeText(url); alert(url); }
+      } catch { /* người dùng hủy chia sẻ */ }
+  };
+
   const handleCloseKickedModal = async () => {
-      setIsKickedModalOpen(false);
-      await Preferences.remove({ key: 'badRallySession' });
-      setRoomPin("");
-      setPlayers([]);
-      setCourts([]);
-      setCurrentScreen('launcher');
+      await leaveToLauncher();
   }
 
-  const handleAddPlayer = () => {
-    if (newPlayerName.trim() === "") return;
-    const newPlayer: Player = { id: generateUUID(), name: newPlayerName.trim(), skill: newPlayerSkill, gender: newPlayerGender, playCount: 0, wins: 0, status: 'waiting' };
-    syncData([...players, newPlayer], courts);
+  const newPlayerFields = (name: string, skill: SkillLevel, gender: Gender) => ({
+      room: roomId, name, skill, gender, status: 'waiting', play_count: 0, wins: 0, wait_since: nowMs(),
+  });
+
+  const handleAddPlayer = async () => {
+    if (newPlayerName.trim() === "" || userRole !== 'host') return;
+    const name = newPlayerName.trim();
     setNewPlayerName("");
+    try { await pb.collection('players').create(newPlayerFields(name, newPlayerSkill, newPlayerGender)); }
+    catch (e) { console.error(e); alert(t.syncError); setNewPlayerName(name); }
   };
 
-  const handleAddGuests = () => {
-    const guests = Array.from({ length: 8 }, (_, i) => ({
-      id: generateUUID(), name: `${t.guestPrefix} ${players.length + i + 1}`, skill: 'Trung bình' as SkillLevel, gender: (i % 2 === 0 ? 'M' : 'F') as Gender, playCount: 0, wins: 0, status: 'waiting' as PlayerStatus
-    }));
-    syncData([...players, ...guests], courts);
+  const handleAddGuests = async () => {
+    if (userRole !== 'host') return;
+    try {
+        const batch = pb.createBatch();
+        for (let i = 0; i < 8; i++) {
+            batch.collection('players').create(newPlayerFields(`${t.guestPrefix} ${playersRef.current.length + i + 1}`, 'Trung bình', i % 2 === 0 ? 'M' : 'F'));
+        }
+        await batch.send();
+    } catch (e) { console.error(e); alert(t.syncError); }
   };
 
-  const handleRemovePlayer = (id: string) => {
-      const newPlayers = players.filter(p => p.id !== id).map(p => {
-          if (p.partnerId === id) return { ...p, partnerId: undefined }; 
-          return p;
-      });
-      syncData(newPlayers, courts);
+  const handleRemovePlayer = async (id: string) => {
+      if (userRole !== 'host') return;
+      const target = playersRef.current.find(p => p.id === id);
+      try {
+          const batch = pb.createBatch();
+          batch.collection('players').delete(id);
+          if (target?.partnerId && playersRef.current.some(p => p.id === target.partnerId)) batch.collection('players').update(target.partnerId, { partner: '' });
+          if (courtRef.current.some(c => c.playerIds.includes(id))) {
+              batch.collection('rooms').update(roomId, { courts: courtRef.current.map(c => ({ ...c, playerIds: c.playerIds.filter(pid => pid !== id) })) });
+          }
+          await batch.send();
+      } catch (e) { console.error(e); alert(t.syncError); reloadRoomRef.current(); }
   };
-  
-  const handleRemoveAllPlayers = () => { 
-      if(window.confirm(t.confirmDeleteAll)) {
-          const newCourts = courts.map(c => ({...c, status: 'available' as const, players: []}));
-          syncData([], newCourts);
-      }
+
+  const handleRemoveAllPlayers = async () => {
+      if (userRole !== 'host' || !window.confirm(t.confirmDeleteAll)) return;
+      try {
+          const ids = playersRef.current.map(p => p.id);
+          for (let i = 0; i < ids.length || i === 0; i += 90) {
+              const batch = pb.createBatch();
+              ids.slice(i, i + 90).forEach(id => batch.collection('players').delete(id));
+              if (i === 0) batch.collection('rooms').update(roomId, { courts: courtRef.current.map(c => ({ ...c, status: 'available', playerIds: [] })) });
+              await batch.send();
+          }
+      } catch (e) { console.error(e); alert(t.syncError); reloadRoomRef.current(); }
   };
 
   const handleLinkClick = (playerId: string) => {
     if (userRole === 'guest') return;
-    const player = players.find(p => p.id === playerId);
+    const player = playersRef.current.find(p => p.id === playerId);
     if (!player) return;
 
-    if (player.partnerId) { 
-        const newPlayers = players.map(p => {
-            if (p.id === playerId || p.id === player.partnerId) return { ...p, partnerId: undefined };
-            return p;
-        });
-        syncData(newPlayers, courts);
+    if (player.partnerId) {
+        const updates: Record<string, Partial<Player>> = { [playerId]: { partnerId: undefined } };
+        if (playersRef.current.some(p => p.id === player.partnerId)) updates[player.partnerId] = { partnerId: undefined };
+        commit(updates);
         if (linkingPlayerId === playerId) setLinkingPlayerId(null);
         return;
     }
 
-    if (linkingPlayerId) { 
-        if (linkingPlayerId === playerId) setLinkingPlayerId(null); 
+    if (linkingPlayerId) {
+        if (linkingPlayerId === playerId) setLinkingPlayerId(null);
         else {
-            const newPlayers = players.map(p => { 
-                if (p.id === playerId) return { ...p, partnerId: linkingPlayerId };
-                if (p.id === linkingPlayerId) return { ...p, partnerId: playerId };
-                return p;
-            });
-            syncData(newPlayers, courts);
+            commit({ [playerId]: { partnerId: linkingPlayerId }, [linkingPlayerId]: { partnerId: playerId } });
             setLinkingPlayerId(null);
         }
-    } else setLinkingPlayerId(playerId); 
+    } else setLinkingPlayerId(playerId);
+  };
+
+  const handleToggleBreak = (p: Player) => {
+      if (userRole !== 'host' || p.status === 'playing') return;
+      commit({ [p.id]: p.status === 'break' ? { status: 'waiting', waitSince: nowMs() } : { status: 'break' } });
   };
 
   function updateSetting<K extends keyof GameSettings>(key: K, value: GameSettings[K]) { setSettings(prev => ({ ...prev, [key]: value })); }
   const updateWeight = (key: keyof GameSettings['weights'], value: number) => { setSettings(prev => ({ ...prev, weights: { ...prev.weights, [key]: value } })); }
 
   const handleApplySettings = () => {
-      let newCourts = [...courts];
-      if (settings.totalCourts > courts.length) {
-          while (newCourts.length < settings.totalCourts) newCourts.push({ id: newCourts.length + 1, status: 'available', players: [], matchType: '2v2' });
-      } else if (settings.totalCourts < courts.length) newCourts.length = settings.totalCourts;
-      syncData(players, newCourts, settings);
+      const newCourts = Array.from({ length: settings.totalCourts }, (_, i) => courtRef.current[i] || { id: i + 1, status: 'available' as const, playerIds: [], matchType: '2v2' as const });
+      // Sân bị bớt đi mà đang có người → trả họ về hàng chờ
+      const freed = courtRef.current.slice(settings.totalCourts).flatMap(c => c.status === 'active' || c.status === 'scoring' ? c.playerIds : []);
+      const updates: Record<string, Partial<Player>> = {};
+      freed.forEach(id => { if (playersRef.current.some(p => p.id === id)) updates[id] = { status: 'waiting', waitSince: nowMs() }; });
+      commit(updates, newCourts, settings);
+      alert(t.settingsSaved);
   };
-  
+
   const handleChangeMatchType = (courtId: number, type: '1v1' | '1v2' | '2v2') => {
-      if(userRole === 'guest') return; 
-      const newCourts = courts.map(c => {
-          if (c.id === courtId) return { ...c, matchType: type, players: c.status === 'drafting' ? [] : c.players };
-          return c;
-      });
-      syncData(players, newCourts);
+      if(userRole === 'guest') return;
+      commit({}, courtRef.current.map(c => c.id === courtId ? { ...c, matchType: type, playerIds: c.status === 'drafting' ? [] : c.playerIds } : c));
   };
 
   const handleShuffleModeChange = (mode: ShuffleMode) => {
@@ -642,138 +818,117 @@ export default function Home() {
     }
   };
 
+  const neededFor = (matchType: Court['matchType']) => matchType === '1v1' ? 2 : matchType === '1v2' ? 3 : 4;
+
   const handleGenerateNextGame = (specificCourtId?: number) => {
     if(userRole === 'guest') return;
-    const courtIndex = specificCourtId ? courts.findIndex(c => c.id === specificCourtId) : courts.findIndex(c => c.status === 'available');
+    const courtIndex = specificCourtId ? courtRef.current.findIndex(c => c.id === specificCourtId) : courtRef.current.findIndex(c => c.status === 'available');
     if (courtIndex === -1) { alert(t.alertCourtFull); return; }
 
-    const courtToFill = courts[courtIndex];
-    const neededPlayers = courtToFill.matchType === '1v1' ? 2 : courtToFill.matchType === '1v2' ? 3 : 4;
-    const availablePlayers = players.filter(p => p.status === 'waiting');
-    
+    const courtToFill = courtRef.current[courtIndex];
+    const neededPlayers = neededFor(courtToFill.matchType);
+    const availablePlayers = playersRef.current.filter(p => p.status === 'waiting');
+
     if (availablePlayers.length < neededPlayers) { alert(t.alertNotEnoughPlayers.replace('{n}', neededPlayers.toString()).replace('{type}', courtToFill.matchType).replace('{m}', availablePlayers.length.toString())); return; }
 
-    const sortedPlayers = [...availablePlayers].sort((a, b) => a.playCount - b.playCount);
-    const waitingPairs: Player[][] = [];
-    const waitingSolos: Player[] = [];
-    const processedIds = new Set<string>();
+    // Chấm điểm mọi cách xếp trong nhóm ưu tiên theo trọng số của chế độ trộn đang chọn
+    const picked = pickMatch(
+        availablePlayers.map(p => ({ id: p.id, playCount: p.playCount, waitSince: p.waitSince, partnerId: p.partnerId, skill: ALL_SKILLS.indexOf(p.skill) })),
+        courtToFill.matchType, settings.weights, historyRef.current, nowMs());
+    if (!picked) return;
+    const selectedIds = [...picked[0], ...picked[1]].map(p => p.id);
 
-    for (const p of sortedPlayers) {
-        if (processedIds.has(p.id)) continue;
-        if (p.partnerId) {
-            const partner = sortedPlayers.find(sp => sp.id === p.partnerId);
-            if (partner) {
-                waitingPairs.push([p, partner]);
-                processedIds.add(p.id); processedIds.add(partner.id);
-                continue;
-            }
-        }
-        waitingSolos.push(p);
-        processedIds.add(p.id);
-    }
-
-    const team1Size = courtToFill.matchType === '2v2' ? 2 : 1;
-    const team2Size = courtToFill.matchType === '1v1' ? 1 : 2;
-    const team1: Player[] = [];
-    const team2: Player[] = [];
-
-    const fillTeam = (team: Player[], size: number) => {
-        while (team.length < size) {
-            const slotsLeft = size - team.length;
-            if (slotsLeft >= 2 && waitingPairs.length > 0) team.push(...waitingPairs.shift()!); 
-            else if (waitingSolos.length > 0) team.push(waitingSolos.shift()!); 
-            else if (waitingPairs.length > 0) {
-                const pair = waitingPairs.shift()!;
-                team.push(pair[0]); 
-                waitingSolos.unshift(pair[1]);
-            } else break;
-        }
-    };
-
-    fillTeam(team1, team1Size); fillTeam(team2, team2Size);
-    const selectedPlayers = [...team1, ...team2];
-
-    const updatedCourts = [...courts];
-    updatedCourts[courtIndex] = { ...updatedCourts[courtIndex], status: 'active', players: selectedPlayers };
-    
-    const updatedPlayers = players.map(p => selectedPlayers.find(sp => sp.id === p.id) ? { ...p, status: 'playing' as PlayerStatus } : p);
-    syncData(updatedPlayers, updatedCourts);
+    const newCourts = courtRef.current.map((c, i) => i === courtIndex ? { ...c, status: 'active' as const, playerIds: selectedIds } : c);
+    const updates: Record<string, Partial<Player>> = {};
+    selectedIds.forEach(id => { updates[id] = { status: 'playing' }; });
+    commit(updates, newCourts);
   };
 
   const handleStartDrafting = (courtId: number) => {
     if(userRole === 'guest') return;
-    const newCourts = courts.map(c => c.id === courtId ? { ...c, status: 'drafting' as const, players: [] } : c);
-    syncData(players, newCourts);
+    commit({}, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'drafting' as const, playerIds: [] } : c));
   };
 
   const handleCancelDrafting = (courtId: number) => {
     if(userRole === 'guest') return;
-    const newCourts = courts.map(c => c.id === courtId ? { ...c, status: 'available' as const, players: [] } : c);
-    syncData(players, newCourts);
+    commit({}, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'available' as const, playerIds: [] } : c));
   };
 
   const handleToggleDraftPlayer = (courtId: number, player: Player) => {
     if(userRole === 'guest') return;
-    const newCourts = courts.map(c => {
+    commit({}, courtRef.current.map(c => {
         if (c.id !== courtId) return c;
-        const isSelected = c.players.some(p => p.id === player.id);
-        const maxPlayers = c.matchType === '1v1' ? 2 : c.matchType === '1v2' ? 3 : 4;
-        if (isSelected) return { ...c, players: c.players.filter(p => p.id !== player.id) };
-        else {
-            if (c.players.length < maxPlayers) return { ...c, players: [...c.players, player] };
-            return c;
-        }
-    });
-    syncData(players, newCourts);
+        if (c.playerIds.includes(player.id)) return { ...c, playerIds: c.playerIds.filter(id => id !== player.id) };
+        if (c.playerIds.length < neededFor(c.matchType)) return { ...c, playerIds: [...c.playerIds, player.id] };
+        return c;
+    }));
   };
 
   const handleStartManualMatch = (courtId: number) => {
     if(userRole === 'guest') return;
-    const court = courts.find(c => c.id === courtId);
+    const court = courtRef.current.find(c => c.id === courtId);
     if (!court) return;
-    const needed = court.matchType === '1v1' ? 2 : court.matchType === '1v2' ? 3 : 4;
-    if (court.players.length !== needed) { alert(t.alertNeedPlayers.replace('{n}', needed.toString())); return; }
-
-    const updatedPlayers = players.map(p => court.players.some(sp => sp.id === p.id) ? { ...p, status: 'playing' as PlayerStatus } : p );
-    const updatedCourts = courts.map(c => c.id === courtId ? { ...c, status: 'active' as const } : c);
-    syncData(updatedPlayers, updatedCourts);
+    const needed = neededFor(court.matchType);
+    // Người đã được chọn nhưng vừa bị xếp sân khác / nghỉ / bị xóa thì không tính
+    const validIds = court.playerIds.filter(id => playersRef.current.find(p => p.id === id)?.status === 'waiting');
+    if (validIds.length !== needed) {
+        alert(t.alertNeedPlayers.replace('{n}', needed.toString()));
+        if (validIds.length !== court.playerIds.length) commit({}, courtRef.current.map(c => c.id === courtId ? { ...c, playerIds: validIds } : c));
+        return;
+    }
+    const updates: Record<string, Partial<Player>> = {};
+    validIds.forEach(id => { updates[id] = { status: 'playing' }; });
+    commit(updates, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'active' as const } : c));
   };
 
+  const handleFinishMatch = (courtId: number) => {
+    if (userRole === 'guest') return;
+    if (settings.trackMatchResults) commit({}, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'scoring' as const } : c));
+    else handleMatchResult(courtId, -1);
+  };
+
+  // winningTeam: 1/2 = đội thắng, -1 = kết thúc không ghi điểm (vẫn tính trận), 0 = hủy trận (không tính)
   const handleMatchResult = (courtId: number, winningTeam: 1 | 2 | 0 | -1) => {
     if(userRole === 'guest') return;
-    const court = courts.find(c => c.id === courtId);
+    const court = courtRef.current.find(c => c.id === courtId);
     if (!court) return;
 
     const topCount = court.matchType === '2v2' ? 2 : 1;
-    const team1Ids = court.players.slice(0, topCount).map(p => p.id);
-    const team2Ids = court.players.slice(topCount).map(p => p.id);
+    const team1Ids = court.playerIds.slice(0, topCount);
+    const now = nowMs();
 
-    const updatedPlayers = players.map(p => {
-        if (team1Ids.includes(p.id) || team2Ids.includes(p.id)) {
-            if (winningTeam === 0) return { ...p, status: 'waiting' as PlayerStatus }; 
-            let isWinner = false;
-            if (winningTeam === 1 && team1Ids.includes(p.id)) isWinner = true;
-            if (winningTeam === 2 && team2Ids.includes(p.id)) isWinner = true;
-            return { ...p, status: 'waiting' as PlayerStatus, playCount: p.playCount + 1, wins: p.wins + (isWinner ? 1 : 0) };
-        }
-        return p;
-    });
-    const updatedCourts = courts.map(c => c.id === courtId ? { ...c, status: 'available' as const, players: [] } : c);
-    syncData(updatedPlayers, updatedCourts);
+    const updates: Record<string, Partial<Player>> = {};
+    for (const id of court.playerIds) {
+        const p = playersRef.current.find(x => x.id === id);
+        if (!p) continue;
+        if (winningTeam === 0) { updates[id] = { status: 'waiting', waitSince: now }; continue; }
+        const isWinner = (winningTeam === 1 && team1Ids.includes(id)) || (winningTeam === 2 && !team1Ids.includes(id));
+        updates[id] = { status: 'waiting', waitSince: now, playCount: p.playCount + 1, wins: p.wins + (isWinner ? 1 : 0) };
+    }
+    // Trận có diễn ra (không phải hủy) → lưu lịch sử ghép cặp, giữ 300 trận gần nhất
+    const newHistory = winningTeam === 0 ? undefined
+        : [...historyRef.current, { t1: team1Ids, t2: court.playerIds.slice(topCount), at: now }].slice(-300);
+    commit(updates, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'available' as const, playerIds: [] } : c), undefined, newHistory);
+  };
+
+  const handleResetCounts = () => {
+      if (userRole !== 'host' || !confirm(t.confirmResetCounts)) return;
+      const now = nowMs();
+      const updates: Record<string, Partial<Player>> = {};
+      // Giữ nguyên trạng thái nghỉ và số trận thắng (kết quả đã lưu), chỉ đặt lại số trận + thứ tự chờ
+      playersRef.current.forEach((p, i) => { updates[p.id] = { playCount: 0, status: p.status === 'break' ? 'break' : 'waiting', waitSince: now + i }; });
+      // Đặt lại cả lịch sử ghép cặp (như mô tả của nút)
+      commit(updates, courtRef.current.map(c => ({ ...c, status: 'available' as const, playerIds: [] })), undefined, []);
   };
 
   const handleResetEvent = async () => {
-      if(window.confirm(t.confirmResetEvent)) {
-          if (!roomPin) return;
-          try {
-              await supabase.from('rooms').delete().eq('id', roomPin);
-              setPlayers([]);
-              await Preferences.remove({ key: 'badRallySession' });
-              setRoomPin("");
-              setCurrentScreen('launcher');
-          } catch (e) { console.error(e); }
-      }
+      if (userRole !== 'host' || !window.confirm(t.confirmResetEvent)) return;
+      try { if (roomId) await pb.collection('rooms').delete(roomId); }
+      catch (e) { console.error(e); }
+      await leaveToLauncher();
   };
+
+  const partnerNames: Record<string, string> = Object.fromEntries(players.map(p => [p.id, p.name]));
 
   const filteredPlayers = players
     .filter(p => playerFilter === 'all' ? true : p.status === playerFilter)
@@ -798,7 +953,7 @@ export default function Home() {
   // ==========================================
   if (currentScreen === "launcher") {
     return (
-      <div className="relative w-full h-screen flex flex-col items-center justify-center overflow-hidden z-10 bg-[#f3f4f6]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/crumpled-paper.png')" }} onMouseMove={handleMouseMove}>
+      <div className="relative w-full h-screen flex flex-col items-center justify-center overflow-hidden z-10 bg-[#f3f4f6]" style={{ backgroundImage: 'var(--paper-texture)' }} onMouseMove={handleMouseMove}>
         <style dangerouslySetInnerHTML={{__html: `
           @keyframes floatSlow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } } 
           @keyframes floatFast { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-25px); } } 
@@ -882,7 +1037,7 @@ export default function Home() {
   // ==========================================
   if (currentScreen === "role_select") {
     return (
-      <div className="relative w-full h-screen flex items-center justify-center bg-[#f3f4f6]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/crumpled-paper.png')" }}>
+      <div className="relative w-full h-screen flex items-center justify-center bg-[#f3f4f6]" style={{ backgroundImage: 'var(--paper-texture)' }}>
          <button onClick={() => setLang(lang === 'VI' ? 'EN' : 'VI')} className="absolute top-4 right-4 z-50 bg-[#bfdbfe] border-[3px] border-black px-3 py-1 text-sm font-black shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] transition-all">
             {lang === 'VI' ? '🇻🇳 VI' : '🇬🇧 EN'}
          </button>
@@ -917,11 +1072,10 @@ export default function Home() {
   // GIAO DIỆN CHỦ SÂN TẠO PHÒNG (MÃ QR ĐỘNG)
   // ==========================================
   if (currentScreen === "host_setup") {
-    const linkToJoin = hostUrl ? `${hostUrl}?pin=${roomPin}` : `https://badrally.vercel.app?pin=${roomPin}`;
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(linkToJoin)}`;
+    const linkToJoin = `${PUBLIC_APP_URL}/?pin=${roomPin}`;
 
     return (
-      <div className="relative w-full h-screen flex items-center justify-center bg-[#f3f4f6]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/crumpled-paper.png')" }}>
+      <div className="relative w-full h-screen flex items-center justify-center bg-[#f3f4f6]" style={{ backgroundImage: 'var(--paper-texture)' }}>
          <div className="bg-white border-[4px] border-black p-8 shadow-[8px_8px_0_0_#000] max-w-sm w-full mx-4 flex flex-col items-center gap-6">
             <h2 className="font-black text-xl uppercase text-center border-b-4 border-yellow-400 pb-2">{t.roomCreated}</h2>
             
@@ -931,7 +1085,7 @@ export default function Home() {
             </div>
 
             <div className="border-4 border-black p-2 bg-white relative">
-                <img src={qrUrl} alt="QR Code" className="w-48 h-48" />
+                <QrCode value={linkToJoin} size={192} className="w-48 h-48" />
             </div>
             <p className="text-xs font-bold text-center text-gray-500">{t.qrDesc}</p>
             
@@ -949,7 +1103,7 @@ export default function Home() {
   // ==========================================
   if (currentScreen === "guest_join") {
     return (
-      <div className="relative w-full h-screen flex items-center justify-center bg-[#f3f4f6]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/crumpled-paper.png')" }}>
+      <div className="relative w-full h-screen flex items-center justify-center bg-[#f3f4f6]" style={{ backgroundImage: 'var(--paper-texture)' }}>
          <button onClick={() => setLang(lang === 'VI' ? 'EN' : 'VI')} className="absolute top-4 right-4 z-50 bg-[#bfdbfe] border-[3px] border-black px-3 py-1 text-sm font-black shadow-[4px_4px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_0_#000] transition-all">
             {lang === 'VI' ? '🇻🇳 VI' : '🇬🇧 EN'}
          </button>
@@ -1009,7 +1163,7 @@ export default function Home() {
 
       {/* SIDEBAR BẢN ĐẦY ĐỦ */}
       <div className={`fixed inset-0 z-[60] ${isSidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-          <div className={`absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0'}`} onClick={() => setIsSidebarOpen(false)}></div>
+          <div className={`absolute inset-0 bg-black/30 backdrop-blur-xs transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100' : 'opacity-0'}`} onClick={() => setIsSidebarOpen(false)}></div>
           <div className={`absolute top-0 right-0 w-[320px] max-w-[85vw] h-full bg-[#f8f9fa] border-l-[3px] border-black transform transition-transform duration-300 ease-out flex flex-col ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
               <div className="flex items-center justify-between p-4 border-b-[3px] border-black bg-white">
                   <div className="flex items-center border-2 border-black rounded-full px-3 py-1 bg-yellow-100">
@@ -1037,7 +1191,7 @@ export default function Home() {
                       </button>
                   )}
 
-                  <button className="bg-white border-[3px] border-black rounded-lg p-3 text-left shadow-[3px_3px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_#000] active:shadow-none transition-all flex gap-3 items-center group">
+                  <button onClick={handleShare} className="bg-white border-[3px] border-black rounded-lg p-3 text-left shadow-[3px_3px_0_0_#000] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[1px_1px_0_0_#000] active:shadow-none transition-all flex gap-3 items-center group">
                       <div className="w-8 h-8 rounded-full border-2 border-black bg-[#fef08a] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform"><i className="fa-solid fa-share-nodes"></i></div>
                       <div>
                           <div className="font-black text-sm leading-tight">{t.sidebar.share}</div>
@@ -1065,7 +1219,7 @@ export default function Home() {
               <div className="p-4 border-t-2 border-dashed border-gray-300 space-y-3 pb-8">
                   <button className="flex items-center justify-between w-full text-[11px] font-bold text-gray-600 hover:text-black transition-colors"><span><i className="fa-regular fa-file-alt w-5 text-center"></i> {t.sidebar.terms}</span><i className="fa-solid fa-chevron-right text-[10px]"></i></button>
                   <button className="flex items-center justify-between w-full text-[11px] font-bold text-gray-600 hover:text-black transition-colors"><span><i className="fa-solid fa-shield-halved w-5 text-center"></i> {t.sidebar.privacy}</span><i className="fa-solid fa-chevron-right text-[10px]"></i></button>
-                  <div className="mt-6 pt-4 flex flex-col items-center justify-center gap-1 opacity-60">
+                  <div className="pt-4 flex flex-col items-center justify-center gap-1 opacity-60">
                       <div className="flex items-center border border-black rounded px-2 py-0.5 bg-yellow-100">
                           <i className="fa-solid fa-circle-check text-yellow-500 mr-1 text-[8px]"></i>
                           <span className="font-black text-[8px] text-blue-600">BAD</span><span className="font-black text-[8px] text-yellow-500">RALLY</span>
@@ -1080,7 +1234,7 @@ export default function Home() {
       </div>
 
       {/* HEADER BẢN ĐẦY ĐỦ (CÓ NÚT LANG, ZOOM, MENU) */}
-      <div className="bg-white border-b-[3px] border-black flex justify-between items-center p-2 sticky top-0 z-30 shadow-sm w-full">
+      <div className="bg-white border-b-[3px] border-black flex justify-between items-center p-2 sticky top-0 z-30 shadow-xs w-full">
         <button onClick={handleExitRoom} className="neo-btn bg-white px-3 py-1 text-sm rounded flex items-center shadow-[2px_2px_0_0_#000] border-2 border-black font-black"><i className="fa-solid fa-arrow-left mr-2"></i> Thoát</button>
         
         <div className="font-black text-lg flex items-center absolute left-1/2 transform -translate-x-1/2 flex-col leading-none mt-1">
@@ -1115,14 +1269,14 @@ export default function Home() {
       </div>
 
       {/* CONTENT AREA */}
-      <div className="flex-1 overflow-auto no-scrollbar p-4 pb-32 bg-[#f3f4f6]" style={{ backgroundImage: "url('https://www.transparenttextures.com/patterns/crumpled-paper.png')" }}>
-        <div style={{ zoom: zoomLevel } as any} className="w-full min-h-full">
+      <div className="flex-1 overflow-auto no-scrollbar p-4 pb-32 bg-[#f3f4f6]" style={{ backgroundImage: 'var(--paper-texture)' }}>
+        <div style={{ zoom: zoomLevel }} className="w-full min-h-full">
 
             {/* TAB: SÂN (COURTS) */}
             {activeTab === "courts" && (
               <div className="w-full h-full">
                 {players.length === 0 ? (
-                    <div className="flex items-center justify-center h-full mt-20" style={{ zoom: zoomLevel ? 1 / zoomLevel : 1 } as any}>
+                    <div className="flex items-center justify-center h-full mt-20" style={{ zoom: zoomLevel ? 1 / zoomLevel : 1 }}>
                         <div className="bg-white neo-border neo-shadow p-6 max-w-[280px] w-full text-center relative flex flex-col items-center">
                             <i className="fa-solid fa-users-slash text-gray-400 text-3xl mb-2 text-stroke-1"></i>
                             <h3 className="font-black text-sm uppercase mb-4 tracking-wide">{t.setupNeeded}</h3>
@@ -1144,7 +1298,7 @@ export default function Home() {
                               
                               {/* SÂN TRỐNG */}
                               {court.status === 'available' && (
-                                  <div className="bg-[#f8f9fa] w-full h-full border border-gray-200 flex flex-col justify-center items-center relative shadow-sm">
+                                  <div className="bg-[#f8f9fa] w-full h-full border border-gray-200 flex flex-col justify-center items-center relative shadow-xs">
                                       {userRole === 'host' && (
                                           <div className="absolute top-2 right-2 flex gap-1 z-20"><button className="p-1.5 bg-white border border-black hover:bg-gray-100 cursor-pointer"><i className="fa-solid fa-grip-vertical text-xs"></i></button><button className="p-1.5 bg-white border border-black text-red-500 hover:bg-red-50 cursor-pointer"><i className="fa-solid fa-trash-can text-xs"></i></button></div>
                                       )}
@@ -1169,7 +1323,7 @@ export default function Home() {
 
                               {/* GIAO DIỆN XẾP TAY */}
                               {court.status === 'drafting' && (
-                                  <div className="bg-[#fef9c3] w-full h-full border-2 border-black flex flex-col relative shadow-sm p-3">
+                                  <div className="bg-[#fef9c3] w-full h-full border-2 border-black flex flex-col relative shadow-xs p-3">
                                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"><span className="text-[120px] font-black text-yellow-500/10 leading-none select-none">{court.id}</span></div>
                                       <h4 className="text-[11px] font-black uppercase mb-3 text-center border-b-[2px] border-black pb-1 z-10">{t.draftTitle} ({court.matchType})</h4>
                                       
@@ -1214,14 +1368,7 @@ export default function Home() {
 
                                       {/* NÚT KẾT THÚC HOẶC CHỜ KẾT QUẢ */}
                                       {court.status === 'active' && userRole === 'host' && (
-                                          <button onClick={() => {
-                                              if (settings.trackMatchResults) {
-                                                  const newCourts = courts.map(c => c.id === court.id ? {...c, status: 'scoring' as const} : c);
-                                                  syncData(players, newCourts);
-                                              } else {
-                                                  handleMatchResult(court.id, -1);
-                                              }
-                                          }} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-yellow-400 border-2 border-black px-4 py-2 font-black text-[11px] uppercase z-20 shadow-[3px_3px_0_0_#000] hover:bg-yellow-300 active:scale-95 active:shadow-none transition-all">{t.finishMatch}</button>
+                                          <button onClick={() => handleFinishMatch(court.id)} className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-yellow-400 border-2 border-black px-4 py-2 font-black text-[11px] uppercase z-20 shadow-[3px_3px_0_0_#000] hover:bg-yellow-300 active:scale-95 active:shadow-none transition-all">{t.finishMatch}</button>
                                       )}
                                       {court.status === 'scoring' && (
                                           <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white border-2 border-black px-3 py-1 font-black text-[10px] uppercase z-20 shadow-[2px_2px_0_0_#000]">{userRole === 'host' ? t.waitingResult : t.guestScoringTag}</div>
@@ -1337,14 +1484,7 @@ export default function Home() {
                                             )}
                                             {court.status === 'active' && userRole === 'host' && (
                                                 <div className="flex flex-col gap-1 items-center justify-center">
-                                                    <button onClick={() => {
-                                                        if (settings.trackMatchResults) {
-                                                            const newCourts = courts.map(c => c.id === court.id ? {...c, status: 'scoring' as const} : c);
-                                                            syncData(players, newCourts);
-                                                        } else {
-                                                            handleMatchResult(court.id, -1);
-                                                        }
-                                                    }} className="bg-yellow-400 font-black uppercase border-2 border-black px-4 py-1.5 shadow-[2px_2px_0_0_#000] text-[10px] w-[120px] hover:bg-yellow-300 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">{t.finishMatch}</button>
+                                                    <button onClick={() => handleFinishMatch(court.id)} className="bg-yellow-400 font-black uppercase border-2 border-black px-4 py-1.5 shadow-[2px_2px_0_0_#000] text-[10px] w-[120px] hover:bg-yellow-300 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">{t.finishMatch}</button>
                                                     <button onClick={() => handleMatchResult(court.id, 0)} className="w-[120px] bg-gray-100 text-red-500 rounded py-1 mt-1 text-[9px] font-bold border border-gray-300 hover:bg-red-100">{t.cancelMatch}</button>
                                                 </div>
                                             )}
@@ -1424,10 +1564,7 @@ export default function Home() {
                                     </div>
                                     {userRole === 'host' && (
                                         <div className="flex gap-2 text-gray-400 text-xs">
-                                            <i className={`fa-solid fa-mug-hot cursor-pointer ${p.status === 'break' ? 'text-black' : 'hover:text-black'}`} title={t.onBreak} onClick={() => {
-                                                const newPlayers = players.map(pl => pl.id === p.id ? {...pl, status: pl.status === 'break' ? 'waiting' : 'break' as PlayerStatus} : pl);
-                                                syncData(newPlayers, courts);
-                                            }}></i>
+                                            <i className={`fa-solid fa-mug-hot cursor-pointer ${p.status === 'break' ? 'text-black' : 'hover:text-black'}`} title={t.onBreak} onClick={() => handleToggleBreak(p)}></i>
                                             <i className={`fa-solid fa-link cursor-pointer text-[10px] ${p.partnerId ? 'text-green-500' : linkingPlayerId === p.id ? 'text-blue-500 animate-pulse' : 'hover:text-black'}`} title={p.partnerId ? t.linkCancel : linkingPlayerId === p.id ? t.linking : t.linkFixed} onClick={() => handleLinkClick(p.id)}></i>
                                             <i className="fa-regular fa-trash-can hover:text-red-500 cursor-pointer" onClick={() => handleRemovePlayer(p.id)}></i>
                                         </div>
@@ -1436,14 +1573,11 @@ export default function Home() {
                                 <div className="font-black text-[15px] truncate mt-1 text-gray-800 flex items-center flex-wrap gap-1">
                                     {p.name} {renderGenderIcon(p.gender)}
                                     {p.status === 'playing' && <span className="text-[10px] text-green-600 ml-1 italic">({t.playing})</span>}
-                                    {p.partnerId && (() => {
-                                        const partner = players.find(x => x.id === p.partnerId);
-                                        return partner ? (
-                                            <span className="text-[9px] text-green-700 bg-green-100 border border-green-400 px-1 rounded flex items-center gap-1 cursor-pointer hover:bg-red-100 hover:text-red-600 hover:border-red-400" title={t.linkCancel} onClick={() => {if(userRole==='host') handleLinkClick(p.id)}}>
-                                                <i className="fa-solid fa-link text-[8px]"></i> {partner.name}
-                                            </span>
-                                        ) : null;
-                                    })()}
+                                    {p.partnerId && partnerNames[p.partnerId] !== undefined && (
+                                        <span className="text-[9px] text-green-700 bg-green-100 border border-green-400 px-1 rounded flex items-center gap-1 cursor-pointer hover:bg-red-100 hover:text-red-600 hover:border-red-400" title={t.linkCancel} onClick={() => {if(userRole==='host') handleLinkClick(p.id)}}>
+                                            <i className="fa-solid fa-link text-[8px]"></i> {partnerNames[p.partnerId]}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -1514,13 +1648,13 @@ export default function Home() {
                               </div>
                               <p className="text-[9px] text-gray-400 font-bold mt-1">{settings.layoutCols * settings.layoutRows} {t.cells} / {settings.totalCourts} {t.courtsTxt}</p>
                           </div>
-                          <hr className="border-t-[2px] border-dashed border-gray-300 my-2" />
+                          <hr className="border-t-[2px] border-dashed border-gray-300" />
                           <div>
                               <label className="text-[10px] font-black uppercase mb-1 block">{t.shuffleMode}</label>
                               <select className="neo-input text-xs font-bold bg-white w-full border-2 border-black p-1.5" value={settings.shuffleMode} onChange={(e) => handleShuffleModeChange(e.target.value as ShuffleMode)}>
                                   <option value="Equal Rotation">{t.shuffleModes["Equal Rotation"]}</option><option value="Skill Based">{t.shuffleModes["Skill Based"]}</option><option value="Social Mix">{t.shuffleModes["Social Mix"]}</option><option value="Fixed Pairs">{t.shuffleModes["Fixed Pairs"]}</option><option value="Manual">{t.shuffleModes["Manual"]}</option>
                               </select>
-                              <p className="text-[8px] text-gray-400 font-bold mt-1">{t.shuffleDesc}</p>
+                              <p className="text-[8px] text-gray-400 font-bold mt-1">{t.shuffleDescs[settings.shuffleMode]}</p>
                           </div>
                           <hr className="border-t-[2px] border-dashed border-gray-300" />
                           <div className="flex justify-between items-center cursor-pointer" onClick={() => setIsWeightsExpanded(!isWeightsExpanded)}>
@@ -1579,9 +1713,9 @@ export default function Home() {
                           </button>
                           <div className="pt-2">
                               <label className="text-[10px] font-black uppercase mb-2 block">{t.navPlayers} ({players.length})</label>
-                              <div className="border-2 border-black bg-gray-50 max-h-[180px] overflow-y-auto p-2 space-y-2 relative rounded-sm custom-scrollbar">
+                              <div className="border-2 border-black bg-gray-50 max-h-[180px] overflow-y-auto p-2 space-y-2 relative rounded-xs custom-scrollbar">
                                   {players.map(p => (
-                                      <div key={p.id} className="border-2 border-black p-2 flex justify-between items-center bg-white rounded-md shadow-sm">
+                                      <div key={p.id} className="border-2 border-black p-2 flex justify-between items-center bg-white rounded-md shadow-xs">
                                           <div className="flex flex-col">
                                               <div className="flex gap-1 mb-0.5">
                                                   <span className="bg-[#fcd34d] text-[8px] font-black px-1 border border-black rounded-[2px]">{tSkill(p.skill)}</span>
@@ -1604,13 +1738,7 @@ export default function Home() {
                       <div className="bg-black text-white text-[11px] font-black px-3 py-1.5 uppercase tracking-wider">{t.resetCountsTitle}</div>
                       <div className="p-4">
                           <p className="text-[9px] font-bold text-gray-500 mb-3 leading-relaxed">{t.resetCountsDesc}</p>
-                          <button onClick={() => {
-                              if(confirm(t.confirmResetCounts)) { 
-                                  const newPlayers = players.map(p => ({...p, playCount: 0, wins: 0, status: 'waiting' as PlayerStatus}));
-                                  const newCourts = courts.map(c => ({...c, status: 'available' as const, players: []}));
-                                  syncData(newPlayers, newCourts);
-                              } 
-                          }} className="w-full bg-[#fcd34d] border-2 border-black py-2.5 text-[10px] font-black uppercase shadow-[2px_2px_0_0_#000] hover:bg-[#fbbf24] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
+                          <button onClick={handleResetCounts} className="w-full bg-[#fcd34d] border-2 border-black py-2.5 text-[10px] font-black uppercase shadow-[2px_2px_0_0_#000] hover:bg-[#fbbf24] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
                               {t.resetCountsBtn}
                           </button>
                       </div>
@@ -1648,7 +1776,7 @@ export default function Home() {
             { id: "players", icon: "fa-users", label: t.navPlayers }, 
             { id: "settings", icon: "fa-gear", label: t.navSettings }
         ].map((tab) => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 py-3 flex flex-col items-center transition-all ${activeTab === tab.id ? "bg-yellow-300 border-t-[5px] border-black -mt-[2px]" : "text-gray-500 hover:bg-gray-100"}`}>
+          <button key={tab.id} onClick={() => setActiveTab(tab.id as typeof activeTab)} className={`flex-1 py-3 flex flex-col items-center transition-all ${activeTab === tab.id ? "bg-yellow-300 border-t-[5px] border-black -mt-[2px]" : "text-gray-500 hover:bg-gray-100"}`}>
             <i className={`fa-solid ${tab.icon} text-xl mb-1 ${activeTab === tab.id ? "text-black" : ""}`}></i>
             <span className={`text-[10px] font-bold uppercase ${activeTab === tab.id ? "text-black" : ""}`}>{tab.label}</span>
           </button>

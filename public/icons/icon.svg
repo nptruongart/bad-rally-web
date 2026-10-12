@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#facc15"/>
+  <g transform="translate(256 262) rotate(-25) scale(17) translate(-12 -12)" stroke-linecap="round" stroke-linejoin="round">
+    <!-- bóng đổ cứng kiểu neo-brutalism -->
+    <g transform="translate(0.7 0.7)" fill="#000">
+      <path d="M8.5 15L4.5 2.5H19.5L15.5 15Z"/>
+      <path d="M7.8 16.5A4.2 4.2 0 0 0 16.2 16.5Z"/>
+    </g>
+    <!-- chùm lông -->
+    <path d="M8.5 15L4.5 2.5H19.5L15.5 15Z" fill="#fff" stroke="#000" stroke-width="1.1"/>
+    <path d="M10 15L8.5 2.5M14 15L15.5 2.5M12 15V2.5M6 7.2H18M7.3 11.2H16.7" fill="none" stroke="#000" stroke-width="0.8"/>
+    <!-- đầu cầu -->
+    <path d="M7.8 16.5H16.2" stroke="#000" stroke-width="1.1"/>
+    <path d="M7.8 16.5A4.2 4.2 0 0 0 16.2 16.5Z" fill="#3b82f6" stroke="#000" stroke-width="1.1"/>
+  </g>
+</svg>
