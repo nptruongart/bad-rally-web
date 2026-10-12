@@ -1,0 +1,16 @@
+[Unit]
+Description=PocketBase (Bad Rally backend)
+After=network.target
+
+[Service]
+Type=simple
+User=pocketbase
+Group=pocketbase
+WorkingDirectory=/opt/pocketbase
+ExecStart=/opt/pocketbase/pocketbase serve --http=127.0.0.1:8090 --dir=/opt/pocketbase/pb_data --migrationsDir=/opt/pocketbase/pb_migrations --hooksDir=/opt/pocketbase/pb_hooks
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

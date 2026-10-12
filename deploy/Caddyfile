@@ -1,0 +1,22 @@
+# Bad Rally - web tĩnh (thư mục out/ của next build) + PocketBase (/api, /_)
+# Đổi dòng dưới thành tên miền thật khi có (vd: badrally.tenmien.vn) — Caddy tự cấp HTTPS.
+146-235-22-130.sslip.io {
+	encode zstd gzip
+
+	# PocketBase: API + realtime (SSE) + trang quản trị /_/
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8090
+	}
+	handle /_/* {
+		reverse_proxy 127.0.0.1:8090
+	}
+
+	handle {
+		root * /var/www/badrally
+		header /_next/static/* Cache-Control "public, max-age=31536000, immutable"
+		header /*.html Cache-Control "no-cache"
+		header /manifest.webmanifest Content-Type "application/manifest+json"
+		try_files {path} {path}.html {path}/index.html /index.html
+		file_server
+	}
+}
