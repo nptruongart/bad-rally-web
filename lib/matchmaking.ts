@@ -7,6 +7,7 @@ export interface MMPlayer {
   waitSince?: number;
   partnerId?: string; // cặp cố định: luôn chung đội
   skill: number;      // 0 (mới chơi) .. 9 (khá+)
+  gender?: 'M' | 'F'; // không có → tính là nam (giống icon hiển thị)
 }
 
 export interface MatchRecord {
@@ -25,6 +26,24 @@ export interface Weights {
 }
 
 export type MatchType = '1v1' | '1v2' | '2v2';
+
+// Thể loại trận đôi: tự do / đôi nam / đôi nữ / nam nữ (mỗi đội 1 nam + 1 nữ)
+export type MatchCategory = 'any' | 'MD' | 'WD' | 'XD';
+
+export const genderOf = (p: { gender?: 'M' | 'F' }) => (p.gender === 'F' ? 'F' : 'M');
+
+// Thể loại chỉ áp dụng cho trận đôi 2v2
+export const effectiveCategory = (matchType: MatchType, category?: MatchCategory): MatchCategory =>
+  matchType === '2v2' && category ? category : 'any';
+
+// Người chơi có được xếp vào trận thuộc thể loại này không
+export const fitsCategory = (p: { gender?: 'M' | 'F' }, category: MatchCategory) =>
+  category === 'MD' ? genderOf(p) === 'M' : category === 'WD' ? genderOf(p) === 'F' : true;
+
+// Đội hợp lệ với thể loại (đôi nam nữ: đúng 1 nam + 1 nữ)
+export const teamFitsCategory = (team: { gender?: 'M' | 'F' }[], category: MatchCategory) =>
+  category === 'XD' ? team.filter(p => genderOf(p) === 'M').length === 1 && team.filter(p => genderOf(p) === 'F').length === 1
+    : team.every(p => fitsCategory(p, category));
 
 export const teamSizes = (matchType: MatchType): [number, number] =>
   matchType === '1v1' ? [1, 1] : matchType === '1v2' ? [1, 2] : [2, 2];
@@ -99,9 +118,12 @@ export function pickMatch(
   weights: Weights,
   history: MatchRecord[],
   now: number,
+  category: MatchCategory = 'any',
 ): [MMPlayer[], MMPlayer[]] | null {
   const [size1, size2] = teamSizes(matchType);
   const needed = size1 + size2;
+  const cat = effectiveCategory(matchType, category);
+  available = available.filter(p => fitsCategory(p, cat));
   if (available.length < needed) return null;
 
   // Thứ tự ưu tiên: ít trận trước, bằng nhau thì ai chờ lâu hơn
@@ -114,14 +136,25 @@ export function pickMatch(
   for (const p of sorted) {
     if (seen.has(p.id)) continue;
     const partner = p.partnerId ? byId.get(p.partnerId) : undefined;
-    if (partner && !seen.has(partner.id)) { units.push([p, partner]); seen.add(partner.id); }
+    if (partner && !seen.has(partner.id) && (cat !== 'XD' || genderOf(p) !== genderOf(partner))) { units.push([p, partner]); seen.add(partner.id); }
     else units.push([p]);
     seen.add(p.id);
   }
 
   const pool: MMPlayer[][] = [];
-  let pooled = 0;
-  for (const u of units) { if (pooled >= POOL_SIZE) break; pool.push(u); pooled += u.length; }
+  if (cat === 'XD') {
+    // Đôi nam nữ: lấy tối đa 6 nam + 6 nữ ưu tiên nhất, để không bị 12 người đầu toàn một giới
+    const count = { M: 0, F: 0 };
+    for (const u of units) {
+      if (count.M >= POOL_SIZE / 2 && count.F >= POOL_SIZE / 2) break;
+      if (!u.some(p => count[genderOf(p)] < POOL_SIZE / 2)) continue;
+      pool.push(u);
+      u.forEach(p => count[genderOf(p)]++);
+    }
+  } else {
+    let pooled = 0;
+    for (const u of units) { if (pooled >= POOL_SIZE) break; pool.push(u); pooled += u.length; }
+  }
 
   const stats = buildStats(history);
   const minPlayCount = sorted[0].playCount;
@@ -130,6 +163,7 @@ export function pickMatch(
   let best: { t1: MMPlayer[]; t2: MMPlayer[]; score: number } | null = null;
 
   const consider = (t1: MMPlayer[], t2: MMPlayer[]) => {
+    if (!teamFitsCategory(t1, cat) || !teamFitsCategory(t2, cat)) return;
     // Hệ số rất nhỏ theo thứ tự ưu tiên để phá thế hòa ổn định
     const score = scoreMatch(t1, t2, weights, stats, minPlayCount, now) - [...t1, ...t2].reduce((s, p) => s + rank.get(p.id)!, 0) * 1e-3;
     if (!best || score > best.score) best = { t1, t2, score };
@@ -150,6 +184,8 @@ export function pickMatch(
 
   if (best) return [(best as { t1: MMPlayer[] }).t1, (best as { t2: MMPlayer[] }).t2];
 
+  // Đôi nam nữ không ghép được (thiếu nam hoặc nữ) → không xếp
+  if (cat === 'XD') return null;
   // Chỉ còn cặp cố định không vừa đội (vd. 1v1) → buộc tách cặp ưu tiên nhất
   const flat = sorted.slice(0, needed);
   return [flat.slice(0, size1), flat.slice(size1, needed)];

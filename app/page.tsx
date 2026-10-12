@@ -4,7 +4,7 @@ import type { ClientResponseError, RecordModel, UnsubscribeFunc } from "pocketba
 import { Preferences } from '@capacitor/preferences'; // Bộ nhớ chuẩn Native App
 import { pb, ensureAuth, roomIdFromPin, PUBLIC_APP_URL } from "../lib/pb";
 import QrCode from "./QrCode";
-import { pickMatch, type MatchRecord } from "../lib/matchmaking";
+import { pickMatch, genderOf, effectiveCategory, fitsCategory, teamFitsCategory, type MatchRecord, type MatchCategory } from "../lib/matchmaking";
 
 // --- CÁC KIỂU DỮ LIỆU ---
 type SkillLevel = 'Mới chơi' | 'Yếu-' | 'Yếu' | 'Yếu+' | 'Trung bình-' | 'Trung bình' | 'Trung bình+' | 'Khá-' | 'Khá' | 'Khá+';
@@ -45,6 +45,7 @@ interface CourtData {
   status: 'available' | 'drafting' | 'active' | 'scoring';
   playerIds: string[];
   matchType: '1v1' | '1v2' | '2v2';
+  category?: MatchCategory; // thể loại trận đôi (đôi nam / đôi nữ / nam nữ), mặc định tự do
 }
 
 interface Court extends CourtData {
@@ -136,6 +137,10 @@ const dict = {
     alertNotEnoughPlayers: "Không đủ {n} người chờ để xếp trận {type}! (Đang có {m} người rảnh)",
     alertNeedPlayers: "Vui lòng chọn đủ {n} người chơi!",
     alertNeedName: "Vui lòng nhập tên hiển thị!",
+    categories: { any: "Tự do", MD: "Đôi nam", WD: "Đôi nữ", XD: "Nam nữ" } as Record<MatchCategory, string>,
+    categoryNeed: { any: "4 người", MD: "4 nam", WD: "4 nữ", XD: "2 nam + 2 nữ" } as Record<MatchCategory, string>,
+    alertCategoryNotEnough: "Không đủ người cho trận {cat}! (cần {need}, đang chờ: {m} nam, {f} nữ)",
+    alertXDTeams: "Đôi nam nữ cần chọn đúng 2 nam và 2 nữ!",
     alertInvalidPin: "Mã phòng gồm 6 chữ số!",
     alertRoomNotFound: "Mã phòng không tồn tại hoặc đã bị đóng!",
     createRoomError: "Lỗi tạo phòng! Kiểm tra kết nối mạng rồi thử lại.",
@@ -285,6 +290,10 @@ const dict = {
     alertNotEnoughPlayers: "Not enough {n} waiting players for {type} match! ({m} available)",
     alertNeedPlayers: "Please select {n} players!",
     alertNeedName: "Please enter your display name!",
+    categories: { any: "Open", MD: "Men's", WD: "Women's", XD: "Mixed" } as Record<MatchCategory, string>,
+    categoryNeed: { any: "4 players", MD: "4 men", WD: "4 women", XD: "2 men + 2 women" } as Record<MatchCategory, string>,
+    alertCategoryNotEnough: "Not enough players for a {cat} match! (need {need}, waiting: {m} men, {f} women)",
+    alertXDTeams: "Mixed doubles needs exactly 2 men and 2 women!",
     alertInvalidPin: "Room PIN must be 6 digits!",
     alertRoomNotFound: "Room not found or already closed!",
     createRoomError: "Could not create room! Check your connection and try again.",
@@ -808,6 +817,11 @@ export default function Home() {
       commit({}, courtRef.current.map(c => c.id === courtId ? { ...c, matchType: type, playerIds: c.status === 'drafting' ? [] : c.playerIds } : c));
   };
 
+  const handleChangeCategory = (courtId: number, category: MatchCategory) => {
+      if (userRole === 'guest') return;
+      commit({}, courtRef.current.map(c => c.id === courtId ? { ...c, category, playerIds: c.status === 'drafting' ? [] : c.playerIds } : c));
+  };
+
   const handleShuffleModeChange = (mode: ShuffleMode) => {
     updateSetting('shuffleMode', mode);
     switch (mode) {
@@ -829,13 +843,19 @@ export default function Home() {
     const neededPlayers = neededFor(courtToFill.matchType);
     const availablePlayers = playersRef.current.filter(p => p.status === 'waiting');
 
+    const category = effectiveCategory(courtToFill.matchType, courtToFill.category);
     if (availablePlayers.length < neededPlayers) { alert(t.alertNotEnoughPlayers.replace('{n}', neededPlayers.toString()).replace('{type}', courtToFill.matchType).replace('{m}', availablePlayers.length.toString())); return; }
 
     // Chấm điểm mọi cách xếp trong nhóm ưu tiên theo trọng số của chế độ trộn đang chọn
     const picked = pickMatch(
-        availablePlayers.map(p => ({ id: p.id, playCount: p.playCount, waitSince: p.waitSince, partnerId: p.partnerId, skill: ALL_SKILLS.indexOf(p.skill) })),
-        courtToFill.matchType, settings.weights, historyRef.current, nowMs());
-    if (!picked) return;
+        availablePlayers.map(p => ({ id: p.id, playCount: p.playCount, waitSince: p.waitSince, partnerId: p.partnerId, skill: ALL_SKILLS.indexOf(p.skill), gender: p.gender })),
+        courtToFill.matchType, settings.weights, historyRef.current, nowMs(), category);
+    if (!picked) {
+        // Không đủ người đúng giới tính cho thể loại đã chọn
+        const men = availablePlayers.filter(p => genderOf(p) === 'M').length;
+        alert(t.alertCategoryNotEnough.replace('{cat}', t.categories[category]).replace('{need}', t.categoryNeed[category]).replace('{m}', String(men)).replace('{f}', String(availablePlayers.length - men)));
+        return;
+    }
     const selectedIds = [...picked[0], ...picked[1]].map(p => p.id);
 
     const newCourts = courtRef.current.map((c, i) => i === courtIndex ? { ...c, status: 'active' as const, playerIds: selectedIds } : c);
@@ -859,8 +879,14 @@ export default function Home() {
     commit({}, courtRef.current.map(c => {
         if (c.id !== courtId) return c;
         if (c.playerIds.includes(player.id)) return { ...c, playerIds: c.playerIds.filter(id => id !== player.id) };
-        if (c.playerIds.length < neededFor(c.matchType)) return { ...c, playerIds: [...c.playerIds, player.id] };
-        return c;
+        if (c.playerIds.length >= neededFor(c.matchType)) return c;
+        const category = effectiveCategory(c.matchType, c.category);
+        if (!fitsCategory(player, category)) return c;
+        if (category === 'XD') {
+            const sameGender = c.playerIds.filter(id => { const p = playersRef.current.find(x => x.id === id); return p && genderOf(p) === genderOf(player); }).length;
+            if (sameGender >= 2) { alert(t.alertXDTeams); return c; }
+        }
+        return { ...c, playerIds: [...c.playerIds, player.id] };
     }));
   };
 
@@ -876,9 +902,21 @@ export default function Home() {
         if (validIds.length !== court.playerIds.length) commit({}, courtRef.current.map(c => c.id === courtId ? { ...c, playerIds: validIds } : c));
         return;
     }
+    let orderedIds = validIds;
+    const category = effectiveCategory(court.matchType, court.category);
+    const chosen = validIds.map(id => playersRef.current.find(p => p.id === id)!);
+    if (category === 'XD') {
+        // Tự sắp lại thành 2 đội, mỗi đội 1 nam + 1 nữ
+        const men = chosen.filter(p => genderOf(p) === 'M'), women = chosen.filter(p => genderOf(p) === 'F');
+        if (men.length !== 2 || women.length !== 2) { alert(t.alertXDTeams); return; }
+        orderedIds = [men[0].id, women[0].id, men[1].id, women[1].id];
+    } else if (!teamFitsCategory(chosen, category)) {
+        alert(t.alertCategoryNotEnough.replace('{cat}', t.categories[category]).replace('{need}', t.categoryNeed[category]).replace(/ (.*)/, ''));
+        return;
+    }
     const updates: Record<string, Partial<Player>> = {};
-    validIds.forEach(id => { updates[id] = { status: 'playing' }; });
-    commit(updates, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'active' as const } : c));
+    orderedIds.forEach(id => { updates[id] = { status: 'playing' }; });
+    commit(updates, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'active' as const, playerIds: orderedIds } : c));
   };
 
   const handleFinishMatch = (courtId: number) => {
@@ -927,6 +965,10 @@ export default function Home() {
       catch (e) { console.error(e); }
       await leaveToLauncher();
   };
+
+  // Nhãn thể loại trận đôi (trống nếu tự do / không phải 2v2)
+  const catLabel = (c: CourtData) => { const cat = effectiveCategory(c.matchType, c.category); return cat === 'any' ? '' : t.categories[cat]; };
+  const CATEGORY_OPTIONS: MatchCategory[] = ['any', 'MD', 'WD', 'XD'];
 
   const partnerNames: Record<string, string> = Object.fromEntries(players.map(p => [p.id, p.name]));
 
@@ -1310,6 +1352,13 @@ export default function Home() {
                                           <button onClick={() => handleChangeMatchType(court.id, '1v2')} disabled={userRole==='guest'} className={`flex items-center gap-1 px-2 py-1 border-2 border-black text-[10px] font-bold ${court.matchType === '1v2' ? 'bg-[#3b82f6] text-white shadow-[2px_2px_0_0_#000]' : 'bg-white text-gray-600'} ${userRole==='guest' ? 'opacity-50 cursor-not-allowed' : ''}`}><i className="fa-solid fa-user-group"></i> 1v2</button>
                                           <button onClick={() => handleChangeMatchType(court.id, '2v2')} disabled={userRole==='guest'} className={`flex items-center gap-1 px-2 py-1 border-2 border-black text-[10px] font-bold ${court.matchType === '2v2' ? 'bg-[#3b82f6] text-white shadow-[2px_2px_0_0_#000]' : 'bg-white text-gray-600'} ${userRole==='guest' ? 'opacity-50 cursor-not-allowed' : ''}`}><i className="fa-solid fa-users"></i> 2v2</button>
                                       </div>
+                                      {court.matchType === '2v2' && (
+                                          <div className="flex gap-1 z-10 -mt-2 mb-4">
+                                              {CATEGORY_OPTIONS.map(cat => (
+                                                  <button key={cat} onClick={() => handleChangeCategory(court.id, cat)} disabled={userRole==='guest'} className={`px-1.5 py-0.5 border-2 border-black text-[9px] font-bold ${(court.category || 'any') === cat ? 'bg-pink-300 text-black shadow-[1px_1px_0_0_#000]' : 'bg-white text-gray-600'} ${userRole==='guest' ? 'opacity-50 cursor-not-allowed' : ''}`}>{t.categories[cat]}</button>
+                                              ))}
+                                          </div>
+                                      )}
                                       {userRole === 'host' ? (
                                         <div className="w-[85%] flex flex-col gap-2 z-10">
                                             <button onClick={() => handleGenerateNextGame(court.id)} className="w-full bg-[#3b82f6] text-white font-black tracking-wide border-2 border-black py-2 shadow-[2px_2px_0_0_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all hover:bg-blue-500 text-[11px]">{t.start}</button>
@@ -1325,7 +1374,7 @@ export default function Home() {
                               {court.status === 'drafting' && (
                                   <div className="bg-[#fef9c3] w-full h-full border-2 border-black flex flex-col relative shadow-xs p-3">
                                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"><span className="text-[120px] font-black text-yellow-500/10 leading-none select-none">{court.id}</span></div>
-                                      <h4 className="text-[11px] font-black uppercase mb-3 text-center border-b-[2px] border-black pb-1 z-10">{t.draftTitle} ({court.matchType})</h4>
+                                      <h4 className="text-[11px] font-black uppercase mb-3 text-center border-b-[2px] border-black pb-1 z-10">{t.draftTitle} ({court.matchType}{catLabel(court) && ` · ${catLabel(court)}`})</h4>
                                       
                                       <div className="flex flex-col gap-1 mb-2 min-h-[50px] z-10">
                                           <div className="text-[9px] font-bold text-gray-500">{t.draftSelected} ({court.players.length}/{neededPlayers}):</div>
@@ -1339,7 +1388,7 @@ export default function Home() {
                                       <div className="flex-1 overflow-y-auto border-t-[2px] border-black pt-2 mb-3 custom-scrollbar z-10">
                                            <div className="text-[9px] font-bold text-gray-500 mb-1.5">{t.draftWaiting}:</div>
                                            <div className="flex flex-wrap gap-1.5">
-                                               {players.filter(p => p.status === 'waiting' && !court.players.some(cp => cp.id === p.id)).map(p => (
+                                               {players.filter(p => p.status === 'waiting' && !court.players.some(cp => cp.id === p.id) && fitsCategory(p, effectiveCategory(court.matchType, court.category))).map(p => (
                                                    <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-white border-2 border-black px-2 py-1 text-[10px] font-bold cursor-pointer hover:bg-green-300 transition-colors shadow-[1px_1px_0_0_#000]">{p.name} {renderGenderIcon(p.gender)}</span>
                                                ))}
                                            </div>
@@ -1355,6 +1404,7 @@ export default function Home() {
                               {/* ĐANG ĐÁ (ACTIVE) & CHỜ KẾT QUẢ (SCORING) */}
                               {(court.status === 'active' || court.status === 'scoring') && (
                                   <div className="bg-[#428259] w-full h-full border-2 border-black relative overflow-hidden flex flex-col py-1">
+                                      {catLabel(court) && <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 bg-pink-300 border-2 border-t-0 border-black px-2 text-[9px] font-black uppercase whitespace-nowrap">{catLabel(court)}</div>}
                                       <div className="absolute inset-2 border-2 border-white/60 pointer-events-none"></div><div className="absolute left-0 right-0 top-1/2 border-t-[3px] border-dashed border-white transform -translate-y-1/2 z-0 pointer-events-none"></div><div className="absolute top-2 bottom-2 left-1/2 w-0.5 bg-white/60 transform -translate-x-1/2 pointer-events-none"></div>
                                       {userRole === 'host' && <div className="absolute top-2 right-2 flex gap-1 bg-white neo-border p-0.5 z-20"><button onClick={() => handleMatchResult(court.id, 0)} className="hover:bg-red-100 text-red-500 px-1 text-xs" title={t.cancelMatch}><i className="fa-solid fa-trash-can"></i></button></div>}
                                       
@@ -1431,10 +1481,17 @@ export default function Home() {
                                                         <button disabled={userRole==='guest'} onClick={() => handleChangeMatchType(court.id, '1v2')} className={`px-2 py-0.5 border-2 border-black text-[9px] font-bold ${court.matchType === '1v2' ? 'bg-[#3b82f6] text-white' : 'bg-white text-gray-600'} ${userRole==='guest' ? 'opacity-50' : ''}`}>1v2</button>
                                                         <button disabled={userRole==='guest'} onClick={() => handleChangeMatchType(court.id, '2v2')} className={`px-2 py-0.5 border-2 border-black text-[9px] font-bold ${court.matchType === '2v2' ? 'bg-[#3b82f6] text-white' : 'bg-white text-gray-600'} ${userRole==='guest' ? 'opacity-50' : ''}`}>2v2</button>
                                                     </div>
+                                                    {court.matchType === '2v2' && (
+                                                        <div className="flex gap-1">
+                                                            {CATEGORY_OPTIONS.map(cat => (
+                                                                <button key={cat} disabled={userRole==='guest'} onClick={() => handleChangeCategory(court.id, cat)} className={`px-1.5 py-0.5 border-2 border-black text-[9px] font-bold ${(court.category || 'any') === cat ? 'bg-pink-300 text-black' : 'bg-white text-gray-600'} ${userRole==='guest' ? 'opacity-50' : ''}`}>{t.categories[cat]}</button>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
-                                            {court.status === 'drafting' && <span className="text-[10px] font-bold text-yellow-600 uppercase bg-yellow-100 px-2 py-1 rounded-full border border-yellow-600">{t.draftTitle} ({court.matchType})</span>}
-                                            {court.status === 'active' && <span className="text-[10px] font-bold text-green-600 uppercase bg-green-100 px-2 py-1 rounded-full border border-green-600">{t.playing} ({court.matchType})</span>}
+                                            {court.status === 'drafting' && <span className="text-[10px] font-bold text-yellow-600 uppercase bg-yellow-100 px-2 py-1 rounded-full border border-yellow-600">{t.draftTitle} ({court.matchType}{catLabel(court) && ` · ${catLabel(court)}`})</span>}
+                                            {court.status === 'active' && <span className="text-[10px] font-bold text-green-600 uppercase bg-green-100 px-2 py-1 rounded-full border border-green-600">{t.playing} ({court.matchType}{catLabel(court) && ` · ${catLabel(court)}`})</span>}
                                             {court.status === 'scoring' && <span className="text-[10px] font-bold text-orange-600 uppercase bg-orange-100 px-2 py-1 rounded-full border border-orange-600">{userRole === 'host' ? t.waitingResult : t.guestScoringTag}</span>}
                                         </td>
 
@@ -1460,7 +1517,7 @@ export default function Home() {
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] font-bold text-gray-500">{t.draftWaiting}:</span>
                                                         <div className="flex flex-wrap gap-1 max-w-[400px]">
-                                                            {players.filter(p => p.status === 'waiting' && !court.players.some(cp => cp.id === p.id)).map(p => <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-white border border-black px-1.5 py-0.5 text-[10px] font-bold cursor-pointer hover:bg-green-200">{p.name} {renderGenderIcon(p.gender)}</span>)}
+                                                            {players.filter(p => p.status === 'waiting' && !court.players.some(cp => cp.id === p.id) && fitsCategory(p, effectiveCategory(court.matchType, court.category))).map(p => <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-white border border-black px-1.5 py-0.5 text-[10px] font-bold cursor-pointer hover:bg-green-200">{p.name} {renderGenderIcon(p.gender)}</span>)}
                                                         </div>
                                                     </div>
                                                 </div>
