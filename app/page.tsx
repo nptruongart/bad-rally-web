@@ -4,6 +4,7 @@ import type { ClientResponseError, RecordModel, UnsubscribeFunc } from "pocketba
 import { Preferences } from '@capacitor/preferences'; // Bộ nhớ chuẩn Native App
 import { pb, ensureAuth, roomIdFromPin, PUBLIC_APP_URL, isHostAccount, redeemHostCode } from "../lib/pb";
 import QrCode from "./QrCode";
+import { unlockAudio, alertCalledToCourt, stopTitleFlash } from "../lib/alerts";
 import { pickMatch, genderOf, effectiveCategory, fitsCategory, teamFitsCategory, type MatchRecord, type MatchCategory } from "../lib/matchmaking";
 
 // --- CÁC KIỂU DỮ LIỆU ---
@@ -24,6 +25,7 @@ interface Player {
   partnerId?: string;
   waitSince?: number; // thời điểm bắt đầu chờ (ms)
   userId?: string;    // tài khoản của khách tự đăng ký (trống nếu chủ sân thêm tay)
+  baseCount?: number; // số trận "tính sẵn" khi vào muộn (server tính) – chỉ dùng để xếp trận công bằng
 }
 
 interface GameSettings {
@@ -137,6 +139,27 @@ const dict = {
     alertNotEnoughPlayers: "Không đủ {n} người chờ để xếp trận {type}! (Đang có {m} người rảnh)",
     alertNeedPlayers: "Vui lòng chọn đủ {n} người chơi!",
     alertNeedName: "Vui lòng nhập tên hiển thị!",
+    myCardTitle: "Của tôi",
+    myWaiting: "Đang chờ – bạn đứng thứ {pos}/{total}",
+    myEtaNext: "Dự kiến: vào sân ở lượt kế tiếp",
+    myEtaLater: "Dự kiến: sau khoảng {n} trận nữa",
+    myPlaying: "Đang đánh ở SÂN {court}",
+    myTeammate: "Đồng đội",
+    myOpponents: "Đối thủ",
+    myScoring: "Chờ chủ sân ghi kết quả...",
+    myOnBreak: "Bạn đang nghỉ – sẽ không được xếp trận",
+    myNotInList: "Bạn không còn trong danh sách phòng này.",
+    btnBreak: "Nghỉ",
+    btnReady: "Sẵn sàng",
+    btnLeave: "Về",
+    confirmLeave: "Rời phòng? Tên bạn sẽ được xóa khỏi danh sách chờ.",
+    undoLabel: "SÂN {court}",
+    undoFinished: "Đã kết thúc",
+    undoBtn: "Hoàn tác",
+    undoUnavailable: "Không hoàn tác được: sân hoặc người chơi đã được xếp trận khác.",
+    calledTitle: "TỚI LƯỢT BẠN!",
+    calledCourt: "SÂN {court}",
+    calledOk: "OK, RA SÂN",
     hostGranted: "Máy này đã được cấp quyền Chủ sân! Giờ bạn có thể tạo phòng.",
     hostRedeemError: "Không kích hoạt được quyền chủ sân",
     noHostPermission: "Máy này chưa có quyền tạo phòng. Hãy xin người quản lý mã QR chủ sân.",
@@ -293,6 +316,27 @@ const dict = {
     alertNotEnoughPlayers: "Not enough {n} waiting players for {type} match! ({m} available)",
     alertNeedPlayers: "Please select {n} players!",
     alertNeedName: "Please enter your display name!",
+    myCardTitle: "Me",
+    myWaiting: "Waiting – you are #{pos} of {total}",
+    myEtaNext: "Expected: next round",
+    myEtaLater: "Expected: in about {n} more games",
+    myPlaying: "Playing on COURT {court}",
+    myTeammate: "Partner",
+    myOpponents: "Opponents",
+    myScoring: "Waiting for the host to record the result...",
+    myOnBreak: "You are on break – you won't be scheduled",
+    myNotInList: "You are no longer in this room's list.",
+    btnBreak: "Break",
+    btnReady: "Ready",
+    btnLeave: "Leave",
+    confirmLeave: "Leave the room? Your name will be removed from the queue.",
+    undoLabel: "COURT {court}",
+    undoFinished: "Finished",
+    undoBtn: "Undo",
+    undoUnavailable: "Can't undo: the court or players have already been assigned elsewhere.",
+    calledTitle: "YOUR TURN!",
+    calledCourt: "COURT {court}",
+    calledOk: "OK, GOING",
     hostGranted: "This device now has Host access! You can create rooms.",
     hostRedeemError: "Could not activate host access",
     noHostPermission: "This device cannot create rooms yet. Ask the organizer for the host QR code.",
@@ -377,6 +421,11 @@ const ALL_SKILLS: SkillLevel[] = ['Mới chơi', 'Yếu-', 'Yếu', 'Yếu+', 'T
 
 // Thời điểm hiện tại (ms) — chỉ gọi trong hàm xử lý sự kiện, không gọi khi render
 const nowMs = () => Date.now();
+// Số trận dùng cho thuật toán: số trận thật + phần tính sẵn của người vào muộn
+const fairCount = (p: { playCount: number; baseCount?: number }) => p.playCount + (p.baseCount || 0);
+
+// Hồ sơ người chơi lưu trên máy (tên, trình độ, giới tính) để lần sau điền sẵn
+const PROFILE_KEY = 'badRallyProfile';
 
 const DEFAULT_SETTINGS: GameSettings = {
   eventName: "Saturday Training",
@@ -400,6 +449,7 @@ const toPlayer = (r: RecordModel): Player => ({
   partnerId: r.partner || undefined,
   waitSince: r.wait_since || 0,
   userId: r.user || undefined,
+  baseCount: r.base_count || 0,
 });
 
 const toFields = (p: Partial<Player>) => {
@@ -412,6 +462,7 @@ const toFields = (p: Partial<Player>) => {
   if ('status' in p) f.status = p.status;
   if ('partnerId' in p) f.partner = p.partnerId ?? '';
   if ('waitSince' in p) f.wait_since = p.waitSince;
+  if ('baseCount' in p) f.base_count = p.baseCount;
   return f;
 };
 
@@ -449,6 +500,10 @@ export default function Home() {
   const [isBusy, setIsBusy] = useState(false);
   // Máy được cấp quyền chủ sân (qua link/QR chủ sân) mới thấy nút Tạo phòng
   const [canHost, setCanHost] = useState(false);
+  const [myUserId, setMyUserId] = useState(""); // tài khoản (ẩn danh) của máy này
+  const [calledAlert, setCalledAlert] = useState(false); // khách vừa được gọi vào sân
+  // Kết quả trận vừa ghi (chủ sân) → cho phép hoàn tác khi bấm nhầm
+  const [lastResult, setLastResult] = useState<{ courtId: number; court: CourtData; players: Record<string, Partial<Player>>; at: number; addedHistory: boolean; winningTeam: 1 | 2 | 0 | -1 } | null>(null);
 
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -476,6 +531,7 @@ export default function Home() {
   const [isKickedModalOpen, setIsKickedModalOpen] = useState(false);
 
   const hostSettingsLoaded = useRef(false);
+  const myUserIdRef = useRef("");
   // Bản mới nhất của dữ liệu cho các hàm xử lý (tránh đọc dữ liệu cũ khi thao tác liên tiếp nhanh)
   const playersRef = useRef<Player[]>([]);
   const courtRef = useRef<CourtData[]>([]);
@@ -494,6 +550,8 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== "undefined") {
         // Khách mở link từ QR (?pin=123456) → điền sẵn PIN và vào màn hình tham gia
+        // Trình duyệt chỉ cho phát tiếng sau khi người dùng chạm vào trang
+        window.addEventListener('pointerdown', unlockAudio);
         const params = new URLSearchParams(window.location.search);
         const urlPin = params.get('pin')?.trim();
         const hostCode = params.get('host')?.trim();
@@ -511,6 +569,12 @@ export default function Home() {
                 const { value } = await Preferences.get({ key: 'badRallySession' });
                 const saved = value ? JSON.parse(value) : null;
                 setCanHost(isHostAccount());
+                try {
+                    const prof = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null');
+                    if (prof?.name) setGuestName(prof.name);
+                    if (ALL_SKILLS.includes(prof?.skill)) setGuestSkill(prof.skill);
+                    if (prof?.gender === 'M' || prof?.gender === 'F') setGuestGender(prof.gender);
+                } catch { /* chưa có hồ sơ */ }
                 if (urlPin && /^\d{6}$/.test(urlPin) && saved?.pin !== urlPin) {
                     setRoomPin(urlPin);
                     setCurrentScreen('guest_join');
@@ -533,6 +597,12 @@ export default function Home() {
         initSession();
     }
   }, []);
+
+  useEffect(() => {
+    if (!lastResult) return;
+    const timer = setTimeout(() => setLastResult(null), 60000);
+    return () => clearTimeout(timer);
+  }, [lastResult]);
 
   const saveSession = async (role: UserRole, pin: string, screen: string) => {
       await Preferences.set({ key: 'badRallySession', value: JSON.stringify({ role, pin, screen }) });
@@ -558,15 +628,28 @@ export default function Home() {
         setIsKickedModalOpen(true);
         await Preferences.remove({ key: 'badRallySession' });
     };
+    // Khách vừa chuyển sang "đang đánh" → rung + chuông + màn hình báo
+    const checkCalled = (userId: string | undefined, id: string, status: string) => {
+        if (!userId || userId !== myUserIdRef.current || status !== 'playing') return;
+        const prev = playersRef.current.find(x => x.id === id);
+        if (prev && prev.status !== 'playing') {
+            setCalledAlert(true);
+            alertCalledToCourt('🔔 ' + dict.VI.calledTitle);
+        }
+    };
     const load = async () => {
         try {
-            await ensureAuth();
+            const uid = await ensureAuth();
+            myUserIdRef.current = uid;
+            setMyUserId(uid);
             const [room, list] = await Promise.all([
                 pb.collection('rooms').getOne(rid),
                 pb.collection('players').getFullList({ filter: pb.filter('room = {:rid}', { rid }), sort: 'created' }),
             ]);
             if (cancelled) return;
             applyRoom(room);
+            // Điện thoại vừa mở lại mà đã được gọi vào sân trong lúc khóa màn hình → vẫn báo
+            list.forEach(r => checkCalled(r.user, r.id, r.status));
             applyPlayers(list.map(toPlayer));
         } catch (e) {
             if ((e as ClientResponseError)?.status === 404) onRoomGone();
@@ -582,6 +665,7 @@ export default function Home() {
                 if (e.action === 'delete') onRoomGone(); else if (!shouldDeferRealtime()) applyRoom(e.record);
             }));
             unsubs.push(await pb.collection('players').subscribe('*', (e) => {
+                if (e.action !== 'delete') checkCalled(e.record.user, e.record.id, e.record.status);
                 if (shouldDeferRealtime()) return;
                 const p = toPlayer(e.record);
                 const prev = playersRef.current;
@@ -596,7 +680,23 @@ export default function Home() {
         } catch (e) { console.error("Lỗi kết nối realtime:", e); load(); }
     })();
 
-    return () => { cancelled = true; unsubs.forEach(u => u()); };
+    // Mở lại app (sau khi khóa màn hình / chuyển app) hoặc có mạng lại → tải lại ngay, không chờ realtime tự nối
+    let lastWake = 0;
+    const onWake = () => {
+        if (document.visibilityState !== 'visible' || nowMs() - lastWake < 2000) return;
+        lastWake = nowMs();
+        if (pendingWrites.current > 0) missedRealtime.current = true; else load();
+    };
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('online', onWake);
+    window.addEventListener('pageshow', onWake);
+
+    return () => {
+        cancelled = true; unsubs.forEach(u => u());
+        document.removeEventListener('visibilitychange', onWake);
+        window.removeEventListener('online', onWake);
+        window.removeEventListener('pageshow', onWake);
+    };
   }, [roomPin, currentScreen, userRole]);
 
   // Chủ sân ghi nhiều thay đổi trong 1 giao dịch (batch): hoặc tất cả thành công, hoặc không gì cả
@@ -687,6 +787,7 @@ export default function Home() {
         }
         else await pb.collection('players').create({ ...profile, room: rid, user: uid, status: 'waiting', wait_since: nowMs() });
 
+        try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch { /* bộ nhớ bị chặn */ }
         setRoomPin(pin);
         setUserRole('guest');
         setCurrentScreen('app');
@@ -722,6 +823,29 @@ export default function Home() {
           }
       }
       await leaveToLauncher();
+  };
+
+  const myPlayer = () => playersRef.current.find(p => p.userId && p.userId === myUserIdRef.current);
+
+  // Khách tự bật/tắt nghỉ (server không cho khách đổi trạng thái khi đang đánh)
+  const handleGuestToggleBreak = async () => {
+      const mine = myPlayer();
+      if (!mine || mine.status === 'playing') return;
+      const next: Partial<Player> = mine.status === 'break' ? { status: 'waiting', waitSince: nowMs() } : { status: 'break' };
+      applyPlayers(playersRef.current.map(p => p.id === mine.id ? { ...p, ...next } : p));
+      try { await pb.collection('players').update(mine.id, toFields(next)); }
+      catch (e) { console.error(e); alert(t.syncError); reloadRoomRef.current(); }
+  };
+
+  const handleGuestLeave = async () => {
+      if (!window.confirm(t.confirmLeave)) return;
+      await handleExitRoom();
+  };
+
+  const dismissCalled = () => {
+      setCalledAlert(false);
+      stopTitleFlash();
+      setActiveTab('courts');
   };
 
   const handleGoToDashboard = async () => {
@@ -867,7 +991,7 @@ export default function Home() {
 
     // Chấm điểm mọi cách xếp trong nhóm ưu tiên theo trọng số của chế độ trộn đang chọn
     const picked = pickMatch(
-        availablePlayers.map(p => ({ id: p.id, playCount: p.playCount, waitSince: p.waitSince, partnerId: p.partnerId, skill: ALL_SKILLS.indexOf(p.skill), gender: p.gender })),
+        availablePlayers.map(p => ({ id: p.id, playCount: fairCount(p), waitSince: p.waitSince, partnerId: p.partnerId, skill: ALL_SKILLS.indexOf(p.skill), gender: p.gender })),
         courtToFill.matchType, settings.weights, historyRef.current, nowMs(), category);
     if (!picked) {
         // Không đủ người đúng giới tính cho thể loại đã chọn
@@ -965,7 +1089,28 @@ export default function Home() {
     // Trận có diễn ra (không phải hủy) → lưu lịch sử ghép cặp, giữ 300 trận gần nhất
     const newHistory = winningTeam === 0 ? undefined
         : [...historyRef.current, { t1: team1Ids, t2: court.playerIds.slice(topCount), at: now }].slice(-300);
+    // Ghi nhớ trạng thái trước đó để hoàn tác nếu bấm nhầm
+    const before: Record<string, Partial<Player>> = {};
+    for (const id of Object.keys(updates)) {
+        const p = playersRef.current.find(x => x.id === id)!;
+        before[id] = { status: p.status, waitSince: p.waitSince, playCount: p.playCount, wins: p.wins };
+    }
+    setLastResult({ courtId, court, players: before, at: now, addedHistory: !!newHistory, winningTeam });
     commit(updates, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'available' as const, playerIds: [] } : c), undefined, newHistory);
+  };
+
+  // Trả sân và người chơi về đúng như trước khi ghi kết quả (chỉ khi sân còn trống và mọi người chưa bị xếp đi chỗ khác)
+  const handleUndoResult = () => {
+    if (userRole !== 'host' || !lastResult) return;
+    const { courtId, court, players: before, at, addedHistory } = lastResult;
+    const current = courtRef.current.find(c => c.id === courtId);
+    const ids = Object.keys(before);
+    const stillFree = current && current.status === 'available' && current.playerIds.length === 0
+        && ids.every(id => playersRef.current.find(p => p.id === id)?.status === 'waiting');
+    setLastResult(null);
+    if (!stillFree) { alert(t.undoUnavailable); return; }
+    commit(before, courtRef.current.map(c => c.id === courtId ? court : c), undefined,
+        addedHistory ? historyRef.current.filter(h => h.at !== at) : undefined);
   };
 
   const handleResetCounts = () => {
@@ -973,7 +1118,7 @@ export default function Home() {
       const now = nowMs();
       const updates: Record<string, Partial<Player>> = {};
       // Giữ nguyên trạng thái nghỉ và số trận thắng (kết quả đã lưu), chỉ đặt lại số trận + thứ tự chờ
-      playersRef.current.forEach((p, i) => { updates[p.id] = { playCount: 0, status: p.status === 'break' ? 'break' : 'waiting', waitSince: now + i }; });
+      playersRef.current.forEach((p, i) => { updates[p.id] = { playCount: 0, baseCount: 0, status: p.status === 'break' ? 'break' : 'waiting', waitSince: now + i }; });
       // Đặt lại cả lịch sử ghép cặp (như mô tả của nút)
       commit(updates, courtRef.current.map(c => ({ ...c, status: 'available' as const, playerIds: [] })), undefined, []);
   };
@@ -988,6 +1133,24 @@ export default function Home() {
   // Nhãn thể loại trận đôi (trống nếu tự do / không phải 2v2)
   const catLabel = (c: CourtData) => { const cat = effectiveCategory(c.matchType, c.category); return cat === 'any' ? '' : t.categories[cat]; };
   const CATEGORY_OPTIONS: MatchCategory[] = ['any', 'MD', 'WD', 'XD'];
+
+  // Thẻ "Của tôi" (khách)
+  const me = userRole === 'guest' && myUserId ? players.find(p => p.userId === myUserId) : undefined;
+  const myCourt = me ? courts.find(c => (c.status === 'active' || c.status === 'scoring') && c.playerIds.includes(me.id)) : undefined;
+  let myTeammates: Player[] = [];
+  let myOpponents: Player[] = [];
+  if (me && myCourt) {
+      const top = myCourt.matchType === '2v2' ? 2 : 1;
+      const team1 = myCourt.players.slice(0, top), team2 = myCourt.players.slice(top);
+      const mine = team1.some(p => p.id === me.id) ? team1 : team2;
+      myTeammates = mine.filter(p => p.id !== me.id);
+      myOpponents = mine === team1 ? team2 : team1;
+  }
+  // Ước tính vị trí hàng chờ theo cùng thứ tự ưu tiên của thuật toán (ít trận trước, chờ lâu trước)
+  const waitingQueue = players.filter(p => p.status === 'waiting').sort((a, b) => fairCount(a) - fairCount(b) || (a.waitSince || 0) - (b.waitSince || 0));
+  const myQueuePos = me && me.status === 'waiting' ? waitingQueue.findIndex(p => p.id === me.id) + 1 : 0;
+  const nextRoundSlots = 4 * Math.max(1, courts.filter(c => c.status === 'available').length);
+  const myEtaText = myQueuePos === 0 ? '' : myQueuePos <= nextRoundSlots ? t.myEtaNext : t.myEtaLater.replace('{n}', String(Math.ceil((myQueuePos - nextRoundSlots) / 4)));
 
   const partnerNames: Record<string, string> = Object.fromEntries(players.map(p => [p.id, p.name]));
 
@@ -1206,6 +1369,20 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen w-full bg-transparent z-50 absolute inset-0 overflow-hidden">
       
+      {/* BÁO KHÁCH ĐƯỢC GỌI VÀO SÂN */}
+      {calledAlert && (
+          <div className="fixed inset-0 z-[110] bg-black/80 flex items-center justify-center p-4" onClick={dismissCalled}>
+              <div className="bg-yellow-300 border-[4px] border-black p-8 max-w-sm w-full text-center shadow-[8px_8px_0_0_#000]">
+                  <div className="text-5xl mb-2">🏸</div>
+                  <h2 className="text-3xl font-black uppercase">{t.calledTitle}</h2>
+                  {myCourt && <p className="text-5xl font-black text-blue-700 my-3">{t.calledCourt.replace('{court}', String(myCourt.id))}</p>}
+                  {myCourt && myTeammates.length > 0 && <p className="text-sm font-bold">{t.myTeammate}: {myTeammates.map(p => p.name).join(', ')}</p>}
+                  {myCourt && <p className="text-sm font-bold">{t.myOpponents}: {myOpponents.map(p => p.name).join(', ')}</p>}
+                  <button onClick={dismissCalled} className="mt-6 w-full bg-white border-[3px] border-black py-3 font-black uppercase shadow-[4px_4px_0_0_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">{t.calledOk}</button>
+              </div>
+          </div>
+      )}
+
       {/* MODAL THÔNG BÁO BỊ ĐUỔI KHỎI PHÒNG (THAY CHO ALERT) */}
       {isKickedModalOpen && (
           <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
@@ -1331,6 +1508,44 @@ export default function Home() {
 
       {/* CONTENT AREA */}
       <div className="flex-1 overflow-auto no-scrollbar p-4 pb-32 bg-[#f3f4f6]" style={{ backgroundImage: 'var(--paper-texture)' }}>
+        {/* THẺ "CỦA TÔI" CHO KHÁCH: trạng thái, vị trí hàng chờ, sân đang đánh + nút Nghỉ / Sẵn sàng / Về */}
+        {userRole === 'guest' && (
+          <div className="max-w-2xl mx-auto mb-4 bg-white border-[3px] border-black shadow-[4px_4px_0_0_#000]">
+            <div className="bg-black text-white text-[11px] font-black px-3 py-1.5 uppercase tracking-wider flex justify-between items-center gap-2">
+              <span className="truncate"><i className="fa-solid fa-user mr-1"></i>{t.myCardTitle}{me ? ` · ${me.name}` : ''}</span>
+              {me && <span className="text-yellow-300 shrink-0">{me.playCount} {t.matchLabel} · {me.wins} {t.winLabel}</span>}
+            </div>
+            <div className="p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1 min-w-0">
+                {!me && <p className="text-sm font-bold text-gray-500">{t.myNotInList}</p>}
+                {me && myCourt && (
+                  <>
+                    <p className="font-black text-green-700 text-lg leading-tight"><i className="fa-solid fa-person-running mr-1"></i>{t.myPlaying.replace('{court}', String(myCourt.id))}{catLabel(myCourt) && <span className="ml-2 text-[10px] bg-pink-300 text-black border-2 border-black px-1.5 align-middle">{catLabel(myCourt)}</span>}</p>
+                    {myTeammates.length > 0 && <p className="text-xs font-bold text-gray-700 mt-1">{t.myTeammate}: <span className="text-blue-700">{myTeammates.map(p => p.name).join(', ')}</span></p>}
+                    <p className="text-xs font-bold text-gray-700">{t.myOpponents}: <span className="text-red-600">{myOpponents.map(p => p.name).join(', ')}</span></p>
+                    {myCourt.status === 'scoring' && <p className="text-[10px] font-bold text-orange-600 mt-1">{t.myScoring}</p>}
+                  </>
+                )}
+                {me && !myCourt && me.status === 'waiting' && (
+                  <>
+                    <p className="font-black text-lg leading-tight"><i className="fa-solid fa-hourglass-half mr-1 text-yellow-500"></i>{t.myWaiting.replace('{pos}', String(myQueuePos)).replace('{total}', String(waitingQueue.length))}</p>
+                    <p className="text-xs font-bold text-gray-500 mt-1">{myEtaText}</p>
+                  </>
+                )}
+                {me && !myCourt && me.status === 'break' && <p className="font-black text-lg text-gray-500 leading-tight"><i className="fa-solid fa-mug-hot mr-1"></i>{t.myOnBreak}</p>}
+                {me && !myCourt && me.status === 'playing' && <p className="font-black text-lg text-green-700 leading-tight"><i className="fa-solid fa-person-running mr-1"></i>{t.playing}</p>}
+              </div>
+              {me && (
+                <div className="flex gap-2 shrink-0">
+                  {me.status !== 'playing' && (
+                    <button onClick={handleGuestToggleBreak} className={`border-2 border-black px-3 py-2 text-xs font-black uppercase shadow-[2px_2px_0_0_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all ${me.status === 'break' ? 'bg-green-300' : 'bg-white'}`}><i className={`fa-solid ${me.status === 'break' ? 'fa-play' : 'fa-mug-hot'} mr-1`}></i>{me.status === 'break' ? t.btnReady : t.btnBreak}</button>
+                  )}
+                  <button onClick={handleGuestLeave} className="border-2 border-black px-3 py-2 text-xs font-black uppercase bg-red-100 text-red-700 shadow-[2px_2px_0_0_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"><i className="fa-solid fa-right-from-bracket mr-1"></i>{t.btnLeave}</button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         <div style={{ zoom: zoomLevel }} className="w-full min-h-full">
 
             {/* TAB: SÂN (COURTS) */}
@@ -1834,6 +2049,15 @@ export default function Home() {
             )}
         </div>
       </div>
+
+      {/* THANH HOÀN TÁC KẾT QUẢ VỪA GHI */}
+      {userRole === 'host' && lastResult && (
+        <div className="fixed bottom-[152px] left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-md z-[55] bg-black text-white border-[3px] border-black shadow-[4px_4px_0_0_#facc15] flex items-center gap-2 px-3 py-2">
+          <span className="flex-1 min-w-0 text-xs font-bold truncate"><i className="fa-solid fa-check text-green-400 mr-1"></i>{t.undoLabel.replace('{court}', String(lastResult.courtId))}: {lastResult.winningTeam === 1 ? t.team1Win : lastResult.winningTeam === 2 ? t.team2Win : lastResult.winningTeam === 0 ? t.cancelMatch : t.undoFinished}</span>
+          <button onClick={handleUndoResult} className="shrink-0 bg-yellow-300 text-black border-2 border-white px-2 py-1 text-[11px] font-black uppercase"><i className="fa-solid fa-rotate-left mr-1"></i>{t.undoBtn}</button>
+          <button onClick={() => setLastResult(null)} className="shrink-0 text-gray-400 hover:text-white px-1" aria-label="close"><i className="fa-solid fa-xmark"></i></button>
+        </div>
+      )}
 
       {/* NÚT TẠO TRẬN MỚI TRÔI */}
       {activeTab === 'courts' && userRole === 'host' && (

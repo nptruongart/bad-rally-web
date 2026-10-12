@@ -32,3 +32,19 @@ routerAdd("POST", "/api/badrally/redeem-host", (e) => {
 
   return e.json(200, { ok: true });
 }, $apis.requireAuth("users"));
+
+// Người chơi mới vào phòng → base_count = trung bình số trận (đã tính base) của những người đang chơi
+// (không tính người nghỉ). Phòng mới chưa ai đánh thì = 0. Ghi đè mọi giá trị client gửi lên.
+onRecordCreate((e) => {
+  let base = 0;
+  try {
+    const others = e.app.findRecordsByFilter("players", "room = {:room} && status != 'break'", "", 0, 0, { room: e.record.getString("room") });
+    if (others.length > 0) {
+      let sum = 0;
+      for (const p of others) sum += p.getInt("play_count") + p.getInt("base_count");
+      base = Math.floor(sum / others.length);
+    }
+  } catch (_) { /* lỗi đọc → coi như 0 */ }
+  e.record.set("base_count", base);
+  e.next();
+}, "players");
