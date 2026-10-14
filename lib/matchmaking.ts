@@ -48,6 +48,9 @@ export const teamFitsCategory = (team: { gender?: 'M' | 'F' }[], category: Match
 export const teamSizes = (matchType: MatchType): [number, number] =>
   matchType === '1v1' ? [1, 1] : matchType === '1v2' ? [1, 2] : [2, 2];
 
+// Khi chia đội cho nhóm đã chọn, luôn cân bằng trình độ ít nhất ở mức này (kể cả chế độ không bật cân bằng kỹ năng)
+const MIN_SPLIT_BALANCE = 60;
+
 const POOL_SIZE = 12; // chỉ xét 12 người ưu tiên nhất → tối đa vài nghìn phương án, chạy tức thì
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
@@ -182,7 +185,29 @@ export function pickMatch(
   };
   assign(0, [], []);
 
-  if (best) return [(best as { t1: MMPlayer[] }).t1, (best as { t2: MMPlayer[] }).t2];
+  if (best) {
+    const chosen = best as { t1: MMPlayer[]; t2: MMPlayer[] };
+    // Bước 2: giữ nguyên những người đã chọn, chia lại đội sao cho 2 bên cân sức nhất (ở mọi chế độ).
+    // Đổi cách chia không ảnh hưởng ai được ra sân nên không làm lệch xoay vòng.
+    const ids = new Set([...chosen.t1, ...chosen.t2].map(p => p.id));
+    const chosenUnits = pool.filter(u => u.every(p => ids.has(p.id)));
+    const splitWeights = { ...weights, skillBalance: Math.max(weights.skillBalance, MIN_SPLIT_BALANCE) };
+    let split: { t1: MMPlayer[]; t2: MMPlayer[]; score: number } | null = null;
+    const trySplit = (i: number, t1: MMPlayer[], t2: MMPlayer[]) => {
+      if (i === chosenUnits.length) {
+        if (t1.length !== size1 || t2.length !== size2 || !teamFitsCategory(t1, cat) || !teamFitsCategory(t2, cat)) return;
+        const score = scoreMatch(t1, t2, splitWeights, stats, minPlayCount, now);
+        if (!split || score > split.score + 1e-9) split = { t1, t2, score };
+        return;
+      }
+      const u = chosenUnits[i];
+      if (t1.length + u.length <= size1) trySplit(i + 1, [...t1, ...u], t2);
+      if (t2.length + u.length <= size2) trySplit(i + 1, t1, [...t2, ...u]);
+    };
+    trySplit(0, [], []);
+    const final = (split as { t1: MMPlayer[]; t2: MMPlayer[] } | null) || chosen;
+    return [final.t1, final.t2];
+  }
 
   // Đôi nam nữ không ghép được (thiếu nam hoặc nữ) → không xếp
   if (cat === 'XD') return null;

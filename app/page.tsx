@@ -44,6 +44,7 @@ interface GameSettings {
 // Lưu trong rooms.courts: chỉ giữ id người chơi (không chép cả object để tránh dữ liệu cũ)
 interface CourtData {
   id: number;
+  name?: string; // tên sân do chủ sân đặt (trống → "Sân {id}")
   status: 'available' | 'drafting' | 'active' | 'scoring';
   playerIds: string[];
   matchType: '1v1' | '1v2' | '2v2';
@@ -143,7 +144,7 @@ const dict = {
     myWaiting: "Đang chờ – bạn đứng thứ {pos}/{total}",
     myEtaNext: "Dự kiến: vào sân ở lượt kế tiếp",
     myEtaLater: "Dự kiến: sau khoảng {n} trận nữa",
-    myPlaying: "Đang đánh ở SÂN {court}",
+    myPlaying: "Đang đánh ở {court}",
     myTeammate: "Đồng đội",
     myOpponents: "Đối thủ",
     myScoring: "Chờ chủ sân ghi kết quả...",
@@ -152,13 +153,14 @@ const dict = {
     btnBreak: "Nghỉ",
     btnReady: "Sẵn sàng",
     btnLeave: "Về",
+    editSkill: "Chạm để sửa trình độ",
     confirmLeave: "Rời phòng? Tên bạn sẽ được xóa khỏi danh sách chờ.",
-    undoLabel: "SÂN {court}",
+    undoLabel: "{court}",
     undoFinished: "Đã kết thúc",
     undoBtn: "Hoàn tác",
     undoUnavailable: "Không hoàn tác được: sân hoặc người chơi đã được xếp trận khác.",
     calledTitle: "TỚI LƯỢT BẠN!",
-    calledCourt: "SÂN {court}",
+    calledCourt: "{court}",
     calledOk: "OK, RA SÂN",
     hostGranted: "Máy này đã được cấp quyền Chủ sân! Giờ bạn có thể tạo phòng.",
     hostRedeemError: "Không kích hoạt được quyền chủ sân",
@@ -197,6 +199,11 @@ const dict = {
     backBtn: "Quay lại",
     roomCreated: "Phòng Đã Mở!",
     roomPinLabel: "Mã PIN Phòng:",
+    roomNameLabel: "Tên phòng / nhóm (không bắt buộc)",
+    roomNamePlaceholder: "VD: CLB Phú Thọ – tối thứ 3",
+    roomNamePrompt: "Tên phòng / nhóm:",
+    courtNamePrompt: "Tên sân (VD: Sân 5, Sân VIP). Để trống = tên mặc định:",
+    renameCourt: "Đổi tên sân",
     qrDesc: "Người chơi dùng điện thoại quét mã QR này để tự đăng ký tên vào danh sách thi đấu.",
     goToDashboard: "Vào Bảng Điều Khiển ➔",
     joinMatch: "Tham gia trận",
@@ -320,7 +327,7 @@ const dict = {
     myWaiting: "Waiting – you are #{pos} of {total}",
     myEtaNext: "Expected: next round",
     myEtaLater: "Expected: in about {n} more games",
-    myPlaying: "Playing on COURT {court}",
+    myPlaying: "Playing on {court}",
     myTeammate: "Partner",
     myOpponents: "Opponents",
     myScoring: "Waiting for the host to record the result...",
@@ -329,13 +336,14 @@ const dict = {
     btnBreak: "Break",
     btnReady: "Ready",
     btnLeave: "Leave",
+    editSkill: "Tap to change skill level",
     confirmLeave: "Leave the room? Your name will be removed from the queue.",
-    undoLabel: "COURT {court}",
+    undoLabel: "{court}",
     undoFinished: "Finished",
     undoBtn: "Undo",
     undoUnavailable: "Can't undo: the court or players have already been assigned elsewhere.",
     calledTitle: "YOUR TURN!",
-    calledCourt: "COURT {court}",
+    calledCourt: "{court}",
     calledOk: "OK, GOING",
     hostGranted: "This device now has Host access! You can create rooms.",
     hostRedeemError: "Could not activate host access",
@@ -374,6 +382,11 @@ const dict = {
     backBtn: "Go Back",
     roomCreated: "Room Opened!",
     roomPinLabel: "Room PIN:",
+    roomNameLabel: "Room / group name (optional)",
+    roomNamePlaceholder: "e.g. Riverside Club – Tuesday night",
+    roomNamePrompt: "Room / group name:",
+    courtNamePrompt: "Court name (e.g. Court 5, VIP). Leave empty for default:",
+    renameCourt: "Rename court",
     qrDesc: "Players can scan this QR code with their phone to join the match list.",
     goToDashboard: "Go To Dashboard ➔",
     joinMatch: "Join Match",
@@ -494,6 +507,7 @@ export default function Home() {
 
   const [userRole, setUserRole] = useState<UserRole>('host');
   const [roomPin, setRoomPin] = useState<string>("");
+  const [roomName, setRoomName] = useState("");
   const [guestName, setGuestName] = useState("");
   const [guestSkill, setGuestSkill] = useState<SkillLevel>("Trung bình");
   const [guestGender, setGuestGender] = useState<Gender>('M');
@@ -617,6 +631,7 @@ export default function Home() {
 
     const applyRoom = (room: RecordModel) => {
         applyCourts((room.courts as CourtData[]) || []);
+        setRoomName(room.name || '');
         historyRef.current = (room.history as MatchRecord[]) || [];
         if (userRole === 'guest' || !hostSettingsLoaded.current) {
             setSettings({ ...DEFAULT_SETTINGS, ...(room.settings || {}) });
@@ -783,7 +798,8 @@ export default function Home() {
             .catch(() => null);
         if (existing) {
             // Đang đánh dở trận thì không được tự sửa hồ sơ → giữ bản ghi cũ, vẫn cho vào phòng
-            if (existing.status !== 'playing') await pb.collection('players').update(existing.id, profile);
+            // Giữ trình độ cũ: chủ sân có thể đã chỉnh lại cho đúng thực lực
+            if (existing.status !== 'playing') await pb.collection('players').update(existing.id, { name: profile.name, gender: profile.gender });
         }
         else await pb.collection('players').create({ ...profile, room: rid, user: uid, status: 'waiting', wait_since: nowMs() });
 
@@ -802,6 +818,7 @@ export default function Home() {
       setRoomPin("");
       applyPlayers([]);
       applyCourts([]);
+      setRoomName("");
       setIsSidebarOpen(false);
       setIsKickedModalOpen(false);
       hostSettingsLoaded.current = false;
@@ -856,7 +873,7 @@ export default function Home() {
   const handleShare = async () => {
       const url = roomPin ? `${PUBLIC_APP_URL}/?pin=${roomPin}` : PUBLIC_APP_URL;
       try {
-          if (navigator.share) await navigator.share({ title: 'Bad Rally', text: roomPin ? `${t.roomPinLabel} ${roomPin}` : t.tagline, url });
+          if (navigator.share) await navigator.share({ title: 'Bad Rally', text: roomPin ? `${roomName ? roomName + ' – ' : ''}${t.roomPinLabel} ${roomPin}` : t.tagline, url });
           else { await navigator.clipboard.writeText(url); alert(url); }
       } catch { /* người dùng hủy chia sẻ */ }
   };
@@ -937,6 +954,11 @@ export default function Home() {
     } else setLinkingPlayerId(playerId);
   };
 
+  const handleChangeSkill = (p: Player, skill: SkillLevel) => {
+      if (userRole !== 'host' || skill === p.skill) return;
+      commit({ [p.id]: { skill } });
+  };
+
   const handleToggleBreak = (p: Player) => {
       if (userRole !== 'host' || p.status === 'playing') return;
       commit({ [p.id]: p.status === 'break' ? { status: 'waiting', waitSince: nowMs() } : { status: 'break' } });
@@ -958,6 +980,28 @@ export default function Home() {
   const handleChangeMatchType = (courtId: number, type: '1v1' | '1v2' | '2v2') => {
       if(userRole === 'guest') return;
       commit({}, courtRef.current.map(c => c.id === courtId ? { ...c, matchType: type, playerIds: c.status === 'drafting' ? [] : c.playerIds } : c));
+  };
+
+  const handleRenameCourt = (court: CourtData) => {
+      if (userRole !== 'host') return;
+      const input = window.prompt(t.courtNamePrompt, court.name || courtName(court));
+      if (input === null) return;
+      const name = input.trim().slice(0, 20);
+      commit({}, courtRef.current.map(c => c.id === court.id ? { ...c, name: name && name !== `${t.court} ${c.id}` ? name : undefined } : c));
+  };
+
+  const saveRoomName = async (name: string) => {
+      if (userRole !== 'host' || !roomId) return;
+      const clean = name.trim().slice(0, 60);
+      setRoomName(clean);
+      try { await pb.collection('rooms').update(roomId, { name: clean }); }
+      catch (e) { console.error(e); alert(t.syncError); }
+  };
+
+  const handleRenameRoom = () => {
+      if (userRole !== 'host') return;
+      const input = window.prompt(t.roomNamePrompt, roomName);
+      if (input !== null) saveRoomName(input);
   };
 
   const handleChangeCategory = (courtId: number, category: MatchCategory) => {
@@ -1131,6 +1175,8 @@ export default function Home() {
   };
 
   // Nhãn thể loại trận đôi (trống nếu tự do / không phải 2v2)
+  const courtName = (c: CourtData) => c.name?.trim() || `${t.court} ${c.id}`;
+  const courtNameById = (id: number) => { const c = courts.find(x => x.id === id); return c ? courtName(c) : `${t.court} ${id}`; };
   const catLabel = (c: CourtData) => { const cat = effectiveCategory(c.matchType, c.category); return cat === 'any' ? '' : t.categories[cat]; };
   const CATEGORY_OPTIONS: MatchCategory[] = ['any', 'MD', 'WD', 'XD'];
 
@@ -1308,6 +1354,11 @@ export default function Home() {
                 <div className="font-black text-5xl tracking-[0.2em] text-blue-600 bg-gray-100 py-3 border-2 border-dashed border-black">{roomPin}</div>
             </div>
 
+            <div className="w-full -mt-2">
+                <label className="font-bold text-gray-500 text-xs mb-1 block">{t.roomNameLabel}</label>
+                <input type="text" maxLength={60} value={roomName} placeholder={t.roomNamePlaceholder} onChange={e => setRoomName(e.target.value)} onBlur={e => saveRoomName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className="w-full border-[3px] border-black p-2 text-sm font-bold" />
+            </div>
+
             <div className="border-4 border-black p-2 bg-white relative">
                 <QrCode value={linkToJoin} size={192} className="w-48 h-48" />
             </div>
@@ -1375,7 +1426,7 @@ export default function Home() {
               <div className="bg-yellow-300 border-[4px] border-black p-8 max-w-sm w-full text-center shadow-[8px_8px_0_0_#000]">
                   <div className="text-5xl mb-2">🏸</div>
                   <h2 className="text-3xl font-black uppercase">{t.calledTitle}</h2>
-                  {myCourt && <p className="text-5xl font-black text-blue-700 my-3">{t.calledCourt.replace('{court}', String(myCourt.id))}</p>}
+                  {myCourt && <p className="text-5xl font-black text-blue-700 my-3">{t.calledCourt.replace('{court}', courtName(myCourt))}</p>}
                   {myCourt && myTeammates.length > 0 && <p className="text-sm font-bold">{t.myTeammate}: {myTeammates.map(p => p.name).join(', ')}</p>}
                   {myCourt && <p className="text-sm font-bold">{t.myOpponents}: {myOpponents.map(p => p.name).join(', ')}</p>}
                   <button onClick={dismissCalled} className="mt-6 w-full bg-white border-[3px] border-black py-3 font-black uppercase shadow-[4px_4px_0_0_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">{t.calledOk}</button>
@@ -1477,7 +1528,8 @@ export default function Home() {
         
         <div className="font-black text-lg flex items-center absolute left-1/2 transform -translate-x-1/2 flex-col leading-none mt-1">
             <div className="flex items-center"><i className="fa-solid fa-circle-check text-yellow-400 mr-1 text-stroke-1"></i><span className="text-blue-600 tracking-tighter">BAD</span><span className="text-yellow-400 tracking-tighter ml-1">RALLY</span></div>
-            {userRole === 'host' && <span className="text-[8px] bg-yellow-400 px-1 border border-black mt-1">PIN: {roomPin}</span>}
+            {roomName && <span onClick={handleRenameRoom} className={`text-[10px] font-black text-gray-700 mt-1 max-w-[150px] truncate ${userRole === 'host' ? 'cursor-pointer' : ''}`}>{roomName}</span>}
+            {userRole === 'host' && <span onClick={roomName ? undefined : handleRenameRoom} className={`text-[8px] bg-yellow-400 px-1 border border-black mt-1 ${roomName ? '' : 'cursor-pointer'}`}>PIN: {roomPin}{!roomName && <i className="fa-solid fa-pen ml-1"></i>}</span>}
             {userRole === 'guest' && <span className="text-[8px] bg-blue-200 text-blue-800 px-1 border border-blue-600 mt-1">Mode: Guest</span>}
         </div>
         
@@ -1520,7 +1572,7 @@ export default function Home() {
                 {!me && <p className="text-sm font-bold text-gray-500">{t.myNotInList}</p>}
                 {me && myCourt && (
                   <>
-                    <p className="font-black text-green-700 text-lg leading-tight"><i className="fa-solid fa-person-running mr-1"></i>{t.myPlaying.replace('{court}', String(myCourt.id))}{catLabel(myCourt) && <span className="ml-2 text-[10px] bg-pink-300 text-black border-2 border-black px-1.5 align-middle">{catLabel(myCourt)}</span>}</p>
+                    <p className="font-black text-green-700 text-lg leading-tight"><i className="fa-solid fa-person-running mr-1"></i>{t.myPlaying.replace('{court}', courtName(myCourt))}{catLabel(myCourt) && <span className="ml-2 text-[10px] bg-pink-300 text-black border-2 border-black px-1.5 align-middle">{catLabel(myCourt)}</span>}</p>
                     {myTeammates.length > 0 && <p className="text-xs font-bold text-gray-700 mt-1">{t.myTeammate}: <span className="text-blue-700">{myTeammates.map(p => p.name).join(', ')}</span></p>}
                     <p className="text-xs font-bold text-gray-700">{t.myOpponents}: <span className="text-red-600">{myOpponents.map(p => p.name).join(', ')}</span></p>
                     {myCourt.status === 'scoring' && <p className="text-[10px] font-bold text-orange-600 mt-1">{t.myScoring}</p>}
@@ -1570,6 +1622,9 @@ export default function Home() {
 
                         return (
                           <div key={court.id} className="relative flex flex-col gap-2 w-[256px]">
+                            <button onClick={() => handleRenameCourt(court)} disabled={userRole !== 'host'} title={userRole === 'host' ? t.renameCourt : undefined} className="self-start bg-black text-white text-[11px] font-black uppercase px-2 py-0.5 border-2 border-black disabled:cursor-default max-w-full truncate">
+                              {courtName(court)}{userRole === 'host' && <i className="fa-solid fa-pen text-[8px] ml-1.5 text-yellow-300"></i>}
+                            </button>
                             <div className="h-[380px] w-full bg-white neo-border p-1 relative flex flex-col shadow-md">
                               
                               {/* SÂN TRỐNG */}
@@ -1704,7 +1759,7 @@ export default function Home() {
                                     
                                     return (
                                     <tr key={court.id} className={`border-b-[2px] border-dashed border-gray-300 transition-colors ${court.status === 'drafting' ? 'bg-[#fef9c3]' : court.status === 'scoring' ? 'bg-orange-50' : 'hover:bg-gray-50'}`}>
-                                        <td className="p-3 text-center font-black text-xl">{court.id}</td>
+                                        <td className={`p-3 text-center font-black ${court.name ? 'text-sm' : 'text-xl'} ${userRole === 'host' ? 'cursor-pointer' : ''}`} onClick={() => handleRenameCourt(court)}>{court.name || court.id}</td>
                                         
                                         <td className="p-3">
                                             {court.status === 'available' && (
@@ -1850,7 +1905,15 @@ export default function Home() {
                             <div key={p.id} className={`bg-white rounded-lg p-3 flex flex-col justify-between border-[3px] transition-all ${p.status === 'playing' ? 'border-green-500 bg-green-50' : 'border-black'}`}>
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex gap-1 items-center">
-                                        <span className="bg-[#fcd34d] text-black text-[10px] font-bold px-1.5 py-0.5 border border-black rounded-[4px]">{tSkill(p.skill)}</span>
+                                        {userRole === 'host' ? (
+                                            // Chủ sân chạm vào trình độ để sửa (khách tự khai có thể chưa đúng)
+                                            <span className="relative inline-flex items-center">
+                                                <select value={p.skill} onChange={e => handleChangeSkill(p, e.target.value as SkillLevel)} title={t.editSkill} className="appearance-none bg-[#fcd34d] text-black text-[10px] font-bold pl-1.5 pr-4 py-0.5 border border-black rounded-[4px] cursor-pointer">
+                                                    {ALL_SKILLS.map(s => <option key={s} value={s}>{tSkill(s)}</option>)}
+                                                </select>
+                                                <i className="fa-solid fa-caret-down text-[8px] absolute right-1.5 pointer-events-none"></i>
+                                            </span>
+                                        ) : <span className="bg-[#fcd34d] text-black text-[10px] font-bold px-1.5 py-0.5 border border-black rounded-[4px]">{tSkill(p.skill)}</span>}
                                         <span className="bg-gray-200 text-gray-500 text-[10px] font-bold px-1.5 py-0.5 border border-gray-300 rounded-[4px]">{p.playCount}G</span>
                                     </div>
                                     {userRole === 'host' && (
@@ -2053,7 +2116,7 @@ export default function Home() {
       {/* THANH HOÀN TÁC KẾT QUẢ VỪA GHI */}
       {userRole === 'host' && lastResult && (
         <div className="fixed bottom-[152px] left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-md z-[55] bg-black text-white border-[3px] border-black shadow-[4px_4px_0_0_#facc15] flex items-center gap-2 px-3 py-2">
-          <span className="flex-1 min-w-0 text-xs font-bold truncate"><i className="fa-solid fa-check text-green-400 mr-1"></i>{t.undoLabel.replace('{court}', String(lastResult.courtId))}: {lastResult.winningTeam === 1 ? t.team1Win : lastResult.winningTeam === 2 ? t.team2Win : lastResult.winningTeam === 0 ? t.cancelMatch : t.undoFinished}</span>
+          <span className="flex-1 min-w-0 text-xs font-bold truncate"><i className="fa-solid fa-check text-green-400 mr-1"></i>{t.undoLabel.replace('{court}', courtNameById(lastResult.courtId))}: {lastResult.winningTeam === 1 ? t.team1Win : lastResult.winningTeam === 2 ? t.team2Win : lastResult.winningTeam === 0 ? t.cancelMatch : t.undoFinished}</span>
           <button onClick={handleUndoResult} className="shrink-0 bg-yellow-300 text-black border-2 border-white px-2 py-1 text-[11px] font-black uppercase"><i className="fa-solid fa-rotate-left mr-1"></i>{t.undoBtn}</button>
           <button onClick={() => setLastResult(null)} className="shrink-0 text-gray-400 hover:text-white px-1" aria-label="close"><i className="fa-solid fa-xmark"></i></button>
         </div>
