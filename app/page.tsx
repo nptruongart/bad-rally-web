@@ -30,10 +30,7 @@ interface Player {
 }
 
 interface GameSettings {
-  eventName: string;
   totalCourts: number;
-  layoutCols: number;
-  layoutRows: number;
   shuffleMode: ShuffleMode;
   trackMatchResults: boolean;
   weights: {
@@ -65,6 +62,8 @@ const dict = {
     startBtn: "Khởi động ứng dụng",
     home: "Trang chủ",
     tableView: "DẠNG BẢNG",
+    layoutWrap: "Lưới",
+    layoutRow: "Dàn ngang",
     gridView: "DẠNG LƯỚI",
     resetLayout: "ĐẶT LẠI",
     navCourts: "Sân",
@@ -108,12 +107,7 @@ const dict = {
     matchLabel: "Trận",
     winLabel: "Thắng",
     gameSettings: "CÀI ĐẶT TRẬN ĐẤU",
-    eventName: "Tên sự kiện",
     totalCourts: "Tổng số sân",
-    layout: "Bố cục",
-    cols: "Cột",
-    rows: "Hàng",
-    cells: "ô",
     courtsTxt: "sân",
     shuffleMode: "Chế độ trộn",
     shuffleModes: { "Equal Rotation": "Xoay vòng đều", "Skill Based": "Dựa trên kỹ năng", "Social Mix": "Trộn xã hội", "Fixed Pairs": "Cặp cố định", "Manual": "Thủ công" },
@@ -255,6 +249,8 @@ const dict = {
     startBtn: "Launch Application",
     home: "Home",
     tableView: "TABLE VIEW",
+    layoutWrap: "Grid",
+    layoutRow: "Row",
     gridView: "GRID VIEW",
     resetLayout: "RESET",
     navCourts: "Courts",
@@ -298,12 +294,7 @@ const dict = {
     matchLabel: "Games",
     winLabel: "Wins",
     gameSettings: "GAME SETTINGS",
-    eventName: "Event Name",
     totalCourts: "Total Courts",
-    layout: "Layout",
-    cols: "Cols",
-    rows: "Rows",
-    cells: "cells",
     courtsTxt: "courts",
     shuffleMode: "Shuffle Mode",
     shuffleModes: { "Equal Rotation": "Equal Rotation", "Skill Based": "Skill Based", "Social Mix": "Social Mix", "Fixed Pairs": "Fixed Pairs", "Manual": "Manual" },
@@ -454,12 +445,10 @@ const fairCount = (p: { playCount: number; baseCount?: number }) => p.playCount 
 
 // Hồ sơ người chơi lưu trên máy (tên, trình độ, giới tính) để lần sau điền sẵn
 const PROFILE_KEY = 'badRallyProfile';
+const COURT_LAYOUT_KEY = 'badRallyCourtLayout';
 
 const DEFAULT_SETTINGS: GameSettings = {
-  eventName: "Saturday Training",
   totalCourts: 4,
-  layoutCols: 2,
-  layoutRows: 2,
   shuffleMode: "Manual",
   trackMatchResults: true,
   weights: { playCountFairness: 100, waitTimePriority: 80, avoidSamePartner: 70, avoidSameOpponents: 55, skillBalance: 0, keepPreviousPair: 0 }
@@ -537,6 +526,8 @@ export default function Home() {
 
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  // Cách bày sân ở dạng lưới: tự xuống dòng, hoặc dàn ngang 1 hàng vuốt trái/phải (nhớ theo từng máy)
+  const [courtLayout, setCourtLayout] = useState<"wrap" | "row">("wrap");
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [courtData, setCourtData] = useState<CourtData[]>([]);
@@ -599,6 +590,7 @@ export default function Home() {
                 const { value } = await Preferences.get({ key: 'badRallySession' });
                 const saved = value ? JSON.parse(value) : null;
                 setCanHost(isHostAccount());
+                try { if (localStorage.getItem(COURT_LAYOUT_KEY) === 'row') setCourtLayout('row'); } catch { /* bộ nhớ bị chặn */ }
                 try {
                     const prof = JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null');
                     if (prof?.name) setGuestName(prof.name);
@@ -655,6 +647,11 @@ export default function Home() {
       }
   }, [lang]);
   const closeScanner = useCallback(() => setScannerOpen(false), []);
+
+  const changeCourtLayout = (layout: "wrap" | "row") => {
+      setCourtLayout(layout);
+      try { localStorage.setItem(COURT_LAYOUT_KEY, layout); } catch { /* bộ nhớ bị chặn */ }
+  };
 
   const saveSession = async (role: UserRole, pin: string, screen: string) => {
       await Preferences.set({ key: 'badRallySession', value: JSON.stringify({ role, pin, screen }) });
@@ -1654,14 +1651,21 @@ export default function Home() {
                     </div>
                 ) : viewMode === 'grid' ? (
                     // DẠNG LƯỚI (GRID)
-                    <div className="flex flex-wrap gap-6 items-start justify-center md:justify-start lg:ml-8 border-2 border-dashed border-gray-300 p-6 min-h-[70vh] rounded-md max-w-6xl">
+                    <>
+                    <div className="flex justify-end gap-1 mb-2 lg:ml-8 max-w-6xl" style={{ zoom: zoomLevel ? 1 / zoomLevel : 1 }}>
+                      <button onClick={() => changeCourtLayout('wrap')} className={`border-2 border-black px-2 py-1 text-[10px] font-black uppercase ${courtLayout === 'wrap' ? 'bg-black text-white' : 'bg-white'}`}><i className="fa-solid fa-border-all mr-1"></i>{t.layoutWrap}</button>
+                      <button onClick={() => changeCourtLayout('row')} className={`border-2 border-black px-2 py-1 text-[10px] font-black uppercase ${courtLayout === 'row' ? 'bg-black text-white' : 'bg-white'}`}><i className="fa-solid fa-left-right mr-1"></i>{t.layoutRow}</button>
+                    </div>
+                    <div className={courtLayout === 'row'
+                      ? "flex flex-nowrap gap-4 items-start overflow-x-auto snap-x snap-mandatory border-2 border-dashed border-gray-300 p-4 rounded-md lg:ml-8 [scrollbar-width:thin]"
+                      : "flex flex-wrap gap-6 items-start justify-center md:justify-start lg:ml-8 border-2 border-dashed border-gray-300 p-6 min-h-[70vh] rounded-md max-w-6xl"}>
                       {courts.map(court => {
                         const topCount = court.matchType === '2v2' ? 2 : 1;
                         const bottomCount = court.matchType === '1v1' ? 1 : (court.matchType === '1v2' ? 2 : 2);
                         const neededPlayers = topCount + bottomCount;
 
                         return (
-                          <div key={court.id} className="relative flex flex-col gap-2 w-[256px]">
+                          <div key={court.id} className="relative flex flex-col gap-2 w-[256px] shrink-0 snap-center">
                             <button onClick={() => handleRenameCourt(court)} disabled={userRole !== 'host'} title={userRole === 'host' ? t.renameCourt : undefined} className="self-start bg-black text-white text-[11px] font-black uppercase px-2 py-0.5 border-2 border-black disabled:cursor-default max-w-full truncate">
                               {courtName(court)}{userRole === 'host' && <i className="fa-solid fa-pen text-[8px] ml-1.5 text-yellow-300"></i>}
                             </button>
@@ -1781,6 +1785,7 @@ export default function Home() {
                         );
                       })}
                     </div>
+                    </>
                 ) : (
                     // DẠNG BẢNG (TABLE VIEW)
                     <div className="w-full max-w-6xl mx-auto bg-white border-[3px] border-black shadow-[6px_6px_0_0_#000] p-4 mt-6 overflow-x-auto">
@@ -2026,21 +2031,10 @@ export default function Home() {
                   <div className="bg-white border-[3px] border-black flex flex-col mt-4">
                       <div className="bg-black text-white text-[11px] font-black px-3 py-1.5 uppercase tracking-wider">{t.gameSettings}</div>
                       <div className="p-4 space-y-4">
-                          <div><label className="text-[10px] font-black uppercase mb-1 block">{t.eventName}</label><input type="text" className="neo-input text-xs font-bold w-full p-2 border-2 border-black" value={settings.eventName} onChange={(e) => updateSetting('eventName', e.target.value)} /></div>
+                          <div><label className="text-[10px] font-black uppercase mb-1 block">{t.roomNameLabel}</label><input type="text" maxLength={60} placeholder={t.roomNamePlaceholder} className="neo-input text-xs font-bold w-full p-2 border-2 border-black" value={roomName} onChange={(e) => setRoomName(e.target.value)} onBlur={(e) => saveRoomName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} /></div>
                           <div>
                               <label className="text-[10px] font-black uppercase mb-1 block">{t.totalCourts}</label>
                               <div className="flex items-center gap-2"><button onClick={() => updateSetting('totalCourts', Math.max(1, settings.totalCourts - 1))} className="bg-[#fcd34d] border-2 border-black w-6 h-6 flex justify-center items-center font-black text-xs">-</button><span className="font-black text-sm w-4 text-center">{settings.totalCourts}</span><button onClick={() => updateSetting('totalCourts', settings.totalCourts + 1)} className="bg-[#fcd34d] border-2 border-black w-6 h-6 flex justify-center items-center font-black text-xs">+</button></div>
-                          </div>
-                          <div>
-                              <label className="text-[10px] font-black uppercase mb-1 block">{t.layout}</label>
-                              <div className="flex items-center text-[10px] font-black gap-2">
-                                  <span>{t.cols}</span><span className="text-base mx-1">{settings.layoutCols}</span>
-                                  <div className="flex flex-col"><button onClick={() => updateSetting('layoutCols', settings.layoutCols + 1)} className="bg-[#fcd34d] border-2 border-black border-b w-4 h-[12px] flex justify-center items-center leading-none text-[8px]">+</button><button onClick={() => updateSetting('layoutCols', Math.max(1, settings.layoutCols - 1))} className="bg-[#fcd34d] border-2 border-black w-4 h-[12px] flex justify-center items-center leading-none text-[8px]">-</button></div>
-                                  <span className="mx-2 font-normal text-gray-500">x</span>
-                                  <span>{t.rows}</span><span className="text-base mx-1">{settings.layoutRows}</span>
-                                  <div className="flex flex-col"><button onClick={() => updateSetting('layoutRows', settings.layoutRows + 1)} className="bg-[#fcd34d] border-2 border-black border-b w-4 h-[12px] flex justify-center items-center leading-none text-[8px]">+</button><button onClick={() => updateSetting('layoutRows', Math.max(1, settings.layoutRows - 1))} className="bg-[#fcd34d] border-2 border-black w-4 h-[12px] flex justify-center items-center leading-none text-[8px]">-</button></div>
-                              </div>
-                              <p className="text-[9px] text-gray-400 font-bold mt-1">{settings.layoutCols * settings.layoutRows} {t.cells} / {settings.totalCourts} {t.courtsTxt}</p>
                           </div>
                           <hr className="border-t-[2px] border-dashed border-gray-300" />
                           <div>
