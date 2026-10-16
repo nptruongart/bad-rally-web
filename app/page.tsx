@@ -1,9 +1,10 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { ClientResponseError, RecordModel, UnsubscribeFunc } from "pocketbase";
 import { Preferences } from '@capacitor/preferences'; // Bộ nhớ chuẩn Native App
 import { pb, ensureAuth, roomIdFromPin, PUBLIC_APP_URL, isHostAccount, redeemHostCode } from "../lib/pb";
 import QrCode from "./QrCode";
+import QrScanner from "./QrScanner";
 import { unlockAudio, alertCalledToCourt, stopTitleFlash } from "../lib/alerts";
 import { pickMatch, genderOf, effectiveCategory, fitsCategory, teamFitsCategory, type MatchRecord, type MatchCategory } from "../lib/matchmaking";
 
@@ -164,6 +165,13 @@ const dict = {
     calledOk: "OK, RA SÂN",
     hostGranted: "Máy này đã được cấp quyền Chủ sân! Giờ bạn có thể tạo phòng.",
     hostRedeemError: "Không kích hoạt được quyền chủ sân",
+    scanQr: "Quét mã QR",
+    scanTitle: "Quét mã QR",
+    scanHint: "Đưa mã QR của phòng (hoặc mã chủ sân) vào khung vàng",
+    scanCancel: "Đóng",
+    scanNoCamera: "Không mở được camera. Hãy cho phép app dùng camera trong Cài đặt của điện thoại, hoặc nhập mã phòng 6 số.",
+    scanAppQr: "Đây là mã mở app. Hãy quét mã QR của phòng trên máy chủ sân, hoặc nhập mã phòng 6 số.",
+    scanUnknown: "Mã QR này không phải của Bad Rally.",
     noHostPermission: "Máy này chưa có quyền tạo phòng. Hãy xin người quản lý mã QR chủ sân.",
     categories: { any: "Tự do", MD: "Đôi nam", WD: "Đôi nữ", XD: "Nam nữ" } as Record<MatchCategory, string>,
     categoryNeed: { any: "4 người", MD: "4 nam", WD: "4 nữ", XD: "2 nam + 2 nữ" } as Record<MatchCategory, string>,
@@ -347,6 +355,13 @@ const dict = {
     calledOk: "OK, GOING",
     hostGranted: "This device now has Host access! You can create rooms.",
     hostRedeemError: "Could not activate host access",
+    scanQr: "Scan QR code",
+    scanTitle: "Scan QR code",
+    scanHint: "Point at the room QR (or host QR) inside the yellow frame",
+    scanCancel: "Close",
+    scanNoCamera: "Can't open the camera. Allow camera access in your phone settings, or type the 6-digit room PIN.",
+    scanAppQr: "This QR just opens the app. Scan the room QR on the host's device, or type the 6-digit room PIN.",
+    scanUnknown: "This QR code isn't from Bad Rally.",
     noHostPermission: "This device cannot create rooms yet. Ask the organizer for the host QR code.",
     categories: { any: "Open", MD: "Men's", WD: "Women's", XD: "Mixed" } as Record<MatchCategory, string>,
     categoryNeed: { any: "4 players", MD: "4 men", WD: "4 women", XD: "2 men + 2 women" } as Record<MatchCategory, string>,
@@ -516,6 +531,7 @@ export default function Home() {
   const [canHost, setCanHost] = useState(false);
   const [myUserId, setMyUserId] = useState(""); // tài khoản (ẩn danh) của máy này
   const [calledAlert, setCalledAlert] = useState(false); // khách vừa được gọi vào sân
+  const [scannerOpen, setScannerOpen] = useState(false); // quét QR bằng camera trong app
   // Kết quả trận vừa ghi (chủ sân) → cho phép hoàn tác khi bấm nhầm
   const [lastResult, setLastResult] = useState<{ courtId: number; court: CourtData; players: Record<string, Partial<Player>>; at: number; addedHistory: boolean; winningTeam: 1 | 2 | 0 | -1 } | null>(null);
 
@@ -617,6 +633,28 @@ export default function Home() {
     const timer = setTimeout(() => setLastResult(null), 60000);
     return () => clearTimeout(timer);
   }, [lastResult]);
+
+  // Kết quả quét QR trong app: mã chủ sân (?host=) → cấp quyền; mã phòng (?pin= hoặc 6 số) → điền sẵn PIN
+  const handleScanResult = useCallback((text: string) => {
+      setScannerOpen(false);
+      let params: URLSearchParams | null = null;
+      try { params = new URL(text.trim()).searchParams; } catch { /* không phải link */ }
+      const hostCode = params?.get('host')?.trim();
+      const pin = params?.get('pin')?.trim() || (/^\d{6}$/.test(text.trim()) ? text.trim() : '');
+      if (hostCode) {
+          redeemHostCode(hostCode)
+              .then(() => { setCanHost(true); setCurrentScreen('role_select'); alert(dict.VI.hostGranted); })
+              .catch((e: ClientResponseError) => alert(dict.VI.hostRedeemError + (e?.response?.message ? ': ' + e.response.message : '')));
+      } else if (pin && /^\d{6}$/.test(pin)) {
+          setRoomPin(pin);
+          setCurrentScreen('guest_join');
+      } else if (params) {
+          alert(dict[lang].scanAppQr);
+      } else {
+          alert(dict[lang].scanUnknown);
+      }
+  }, [lang]);
+  const closeScanner = useCallback(() => setScannerOpen(false), []);
 
   const saveSession = async (role: UserRole, pin: string, screen: string) => {
       await Preferences.set({ key: 'badRallySession', value: JSON.stringify({ role, pin, screen }) });
@@ -1388,7 +1426,9 @@ export default function Home() {
             <div>
                 <label className="text-[11px] font-black uppercase mb-1 block">{t.pinLabel}</label>
                 <input type="text" maxLength={6} placeholder={t.pinPlaceholder} className="w-full border-[3px] border-black p-3 text-2xl tracking-widest text-center font-black focus:outline-none focus:bg-yellow-50" value={roomPin} onChange={e => setRoomPin(e.target.value)} />
+                <button onClick={() => setScannerOpen(true)} className="mt-2 w-full bg-[#bfdbfe] border-[3px] border-black py-2 text-xs font-black uppercase shadow-[2px_2px_0_0_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"><i className="fa-solid fa-camera mr-2"></i>{t.scanQr}</button>
             </div>
+            {scannerOpen && <QrScanner onResult={handleScanResult} onClose={closeScanner} labels={{ title: t.scanTitle, hint: t.scanHint, cancel: t.scanCancel, noCamera: t.scanNoCamera }} />}
 
             <div>
                 <label className="text-[11px] font-black uppercase mb-1 block">{t.yourNameLabel}</label>
