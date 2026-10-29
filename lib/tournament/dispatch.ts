@@ -18,9 +18,9 @@ export type BlockReason = { kind: 'busy'; person: string; matchId: string } | { 
 const isOpen = (s: MatchStatus) => s === 'pending' || s === 'ready';
 const isOnCourt = (s: MatchStatus) => s === 'called' || s === 'playing';
 
-export function planQueue(input: { matches: DMatch[]; people: Record<string, string[]>; now: number; restMs: number }): {
-  ready: DMatch[];
-  blocked: { match: DMatch; reason: BlockReason }[];
+export function planQueue<M extends DMatch>(input: { matches: M[]; people: Record<string, string[]>; now: number; restMs: number }): {
+  ready: M[];
+  blocked: { match: M; reason: BlockReason }[];
 } {
   const { matches, people, now, restMs } = input;
   const who = (m: DMatch) => [...(people[m.entryA!] || []), ...(people[m.entryB!] || [])];
@@ -37,8 +37,8 @@ export function planQueue(input: { matches: DMatch[]; people: Record<string, str
     }
   }
 
-  const ready: DMatch[] = [];
-  const blocked: { match: DMatch; reason: BlockReason }[] = [];
+  const ready: M[] = [];
+  const blocked: { match: M; reason: BlockReason }[] = [];
   for (const m of matches) {
     if (!isOpen(m.status) || !m.entryA || !m.entryB) continue;
     const ps = who(m);
