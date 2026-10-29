@@ -38,7 +38,7 @@ function EventEditor({ ev, tournamentId, onDone }: { ev?: TEvent; tournamentId: 
     } catch (e) { alert("Không lưu được nội dung: " + errText(e)); }
   };
   return (
-    <div className="flex flex-col gap-2 border-2 border-dashed border-black p-2 bg-yellow-50">
+    <div className="flex flex-col gap-2 rounded-xl border border-dashed border-slate-300 p-2 bg-amber-50/60">
       <Field label="Tên nội dung"><input value={name} onChange={e => setName(e.target.value)} maxLength={60} placeholder="VD: Đôi nam B" className={inputCls} /></Field>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Loại">
@@ -55,7 +55,7 @@ function EventEditor({ ev, tournamentId, onDone }: { ev?: TEvent; tournamentId: 
         </Field>
         <Field label="Điểm trần"><input type="number" min={points} max={60} value={cap} onChange={e => setCap(Number(e.target.value) || defaultCap(points))} className={inputCls} /></Field>
       </div>
-      <p className="text-[10px] font-bold text-gray-500">Gợi ý: 21 điểm trần 30 (luật cũ) · 15 điểm trần 21 (luật BWF từ 2027).</p>
+      <p className="text-xs font-medium text-slate-500">Gợi ý: 21 điểm trần 30 (luật cũ) · 15 điểm trần 21 (luật BWF từ 2027).</p>
       <div className="flex gap-2"><Btn tone="black" onClick={save}>Lưu nội dung</Btn><Btn onClick={onDone}>Hủy</Btn></div>
     </div>
   );
@@ -117,8 +117,8 @@ export default function BtcSetup({ data, uid }: { data: TournamentData; uid: str
 
       <Card title="Link & QR giải">
         <div className="flex flex-col items-center gap-2">
-          <div className="border-4 border-black p-1 bg-white"><QrCode value={link} size={176} className="w-44 h-44" /></div>
-          <p className="text-xs font-bold break-all text-center">{link}</p>
+          <div className="rounded-xl border border-slate-200 p-1 bg-white"><QrCode value={link} size={176} className="w-44 h-44" /></div>
+          <p className="text-xs font-medium break-all text-center">{link}</p>
           <Btn small onClick={() => { navigator.clipboard?.writeText(link).then(() => alert("Đã chép link."), () => alert(link)); }}>Chép link</Btn>
         </div>
       </Card>
@@ -153,29 +153,29 @@ export default function BtcSetup({ data, uid }: { data: TournamentData; uid: str
       <Card title="Nội dung thi đấu">
         <div className="flex flex-col gap-2">
           {events.map(ev => editing === ev.id ? <EventEditor key={ev.id} ev={ev} tournamentId={t.id} onDone={() => setEditing("")} /> : (
-            <div key={ev.id} className="flex items-center gap-2 border-2 border-black p-2 text-xs">
+            <div key={ev.id} className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 text-xs">
               <div className="flex-1 min-w-0">
-                <div className="font-black">{ev.name}</div>
-                <div className="font-bold text-gray-500">{entries.filter(e => e.event === ev.id && e.status === "approved").length}/{ev.maxEntries} đôi · {ev.scoring.games === 1 ? "1 set" : "2/3 set"} {ev.scoring.points} điểm (trần {ev.scoring.cap})</div>
+                <div className="font-semibold">{ev.name}</div>
+                <div className="font-medium text-slate-500">{entries.filter(e => e.event === ev.id && e.status === "approved").length}/{ev.maxEntries} đôi · {ev.scoring.games === 1 ? "1 set" : "2/3 set"} {ev.scoring.points} điểm (trần {ev.scoring.cap})</div>
               </div>
               <Btn small onClick={() => setEditing(ev.id)}><i className="fa-solid fa-pen"></i></Btn>
               {(!ev.stage || ev.stage === "registration") && <Btn small tone="red" onClick={() => deleteEvent(ev)}><i className="fa-solid fa-trash-can"></i></Btn>}
             </div>
           ))}
-          {editing === "new" ? <EventEditor tournamentId={t.id} onDone={() => setEditing("")} /> : <Btn tone="yellow" onClick={() => setEditing("new")}>+ Thêm nội dung</Btn>}
+          {editing === "new" ? <EventEditor tournamentId={t.id} onDone={() => setEditing("")} /> : <Btn onClick={() => setEditing("new")}>+ Thêm nội dung</Btn>}
         </div>
       </Card>
 
       <Card title="Mã BTC (cho máy BTC khác)">
-        <p className="text-[11px] font-bold text-gray-600 mb-2">Máy có quyền chủ sân nhập mã này (trong trang giải) là cùng điều khiển giải. Dùng khi đổi máy, mất máy, hoặc cần 2 người làm BTC. Không gửi mã vào nhóm chung.</p>
+        <p className="text-[11px] font-medium text-slate-600 mb-2">Máy có quyền chủ sân nhập mã này (trong trang giải) là cùng điều khiển giải. Dùng khi đổi máy, mất máy, hoặc cần 2 người làm BTC. Không gửi mã vào nhóm chung.</p>
         <div className="flex items-center gap-2">
-          <span className="font-black text-2xl tracking-[0.2em] border-2 border-dashed border-black px-3 py-1 bg-gray-50">{secret?.code || "…"}</span>
+          <span className="font-semibold text-2xl tracking-[0.2em] rounded-xl border border-dashed border-slate-300 px-3 py-1 bg-slate-50">{secret?.code || "…"}</span>
           <Btn small onClick={rotateCode}>Đổi mã</Btn>
         </div>
         <div className="mt-3 flex flex-col gap-1">
-          <span className="text-[10px] font-black uppercase">Các máy BTC ({t.hosts.length})</span>
+          <span className="text-xs font-semibold">Các máy BTC ({t.hosts.length})</span>
           {t.hosts.map((h, i) => (
-            <div key={h} className="flex items-center gap-2 text-xs font-bold">
+            <div key={h} className="flex items-center gap-2 text-xs font-medium">
               <span className="flex-1">Máy {i + 1}{h === uid ? " (máy này)" : ""}</span>
               <Btn small tone="red" onClick={() => removeHost(h)}>Gỡ</Btn>
             </div>

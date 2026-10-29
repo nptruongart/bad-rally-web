@@ -95,14 +95,14 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
     const groupDone = matches.filter(m => m.stage === "group").every(m => m.status === "done" || m.status === "walkover");
     return (
       <Card title={`${event.name}: đã công bố lịch`}>
-        <div className="flex flex-col gap-2 text-xs font-bold">
+        <div className="flex flex-col gap-2 text-xs font-medium">
           <p>{event.format === "rr" ? "Vòng tròn" : `${event.groups} bảng, mỗi bảng lấy ${event.advance} đôi`} · {matches.filter(m => m.status === "done" || m.status === "walkover").length}/{matches.length} trận xong</p>
           {event.format === "groups_ko" && (
             <Btn tone="green" disabled={!groupDone || groupResultLocked(ko)} onClick={fillBracket}>
               {ko.some(m => m.entryA) ? "Điền lại nhánh từ bảng xếp hạng" : "Điền nhánh từ bảng xếp hạng"}
             </Btn>
           )}
-          {!groupDone && event.format === "groups_ko" && <p className="text-gray-500">Đánh xong vòng bảng thì điền nhánh.</p>}
+          {!groupDone && event.format === "groups_ko" && <p className="text-slate-500">Đánh xong vòng bảng thì điền nhánh.</p>}
           <Btn tone="red" small onClick={unpublish}>Hủy bốc thăm</Btn>
         </div>
       </Card>
@@ -112,7 +112,7 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
   return (
     <Card title={`${event.name}: ${n} đôi đã duyệt`}>
       <div className="flex flex-col gap-3">
-        {data.t.status === "registration" && <p className="text-xs font-bold text-orange-600">Giải còn đang mở đăng ký. Nên khóa đăng ký trước khi bốc thăm.</p>}
+        {data.t.status === "registration" && <p className="text-xs font-medium text-amber-600">Giải còn đang mở đăng ký. Nên khóa đăng ký trước khi bốc thăm.</p>}
         <div className="grid grid-cols-3 gap-2">
           <Field label="Thể thức">
             <select value={format} onChange={e => { setFormat(e.target.value as typeof format); setPreview(null); }} className={inputCls}><option value="rr">Vòng tròn</option><option value="groups_ko">Bảng → loại</option></select>
@@ -122,12 +122,12 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
             <Field label="Lấy mỗi bảng"><select value={advance} onChange={e => setAdvance(Number(e.target.value) as 1 | 2)} className={inputCls}><option value={1}>1</option><option value={2}>2</option></select></Field>
           </>}
         </div>
-        <p className="text-[10px] font-bold text-gray-500">Gợi ý với {n} đôi: {sug.format === "rr" ? "vòng tròn" : "2 bảng, mỗi bảng lấy 2 → bán kết chéo"}.</p>
+        <p className="text-xs font-medium text-slate-500">Gợi ý với {n} đôi: {sug.format === "rr" ? "vòng tròn" : "2 bảng, mỗi bảng lấy 2 → bán kết chéo"}.</p>
 
         {maxSeeds > 0 && (
           <div>
             <div className="flex justify-between items-center mb-1">
-              <span className="text-[10px] font-black uppercase">Hạt giống ({seeds.length}/{maxSeeds}) — chạm theo thứ tự 1, 2…</span>
+              <span className="text-xs font-semibold">Hạt giống ({seeds.length}/{maxSeeds}) — chạm theo thứ tự 1, 2…</span>
               <Btn small onClick={() => setSeeds(suggestSeeds(approved, data.participants, maxSeeds))}>Gợi ý</Btn>
             </div>
             <div className="flex flex-col gap-1">
@@ -135,8 +135,8 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
                 const s = seeds.indexOf(e.id);
                 return (
                   <button key={e.id} type="button" onClick={() => setSeeds(cur => (s >= 0 ? cur.filter(x => x !== e.id) : cur.length < maxSeeds ? [...cur, e.id] : cur))}
-                    className={`text-left border-2 border-black px-2 py-1 text-xs font-bold ${s >= 0 ? "bg-yellow-200" : "bg-white"}`}>
-                    {s >= 0 && <span className="font-black mr-1">#{s + 1}</span>}{label(e.id)}
+                    className={`text-left rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium ${s >= 0 ? "bg-blue-100" : "bg-white"}`}>
+                    {s >= 0 && <span className="font-semibold mr-1">#{s + 1}</span>}{label(e.id)}
                   </button>
                 );
               })}
@@ -144,18 +144,18 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
           </div>
         )}
 
-        {invalid ? <p className="text-xs font-black text-red-600">{invalid}</p> : <Btn tone="yellow" onClick={draw}>{preview ? "Bốc lại" : "Bốc thăm"}</Btn>}
+        {invalid ? <p className="text-xs font-semibold text-red-600">{invalid}</p> : <Btn tone="blue" onClick={draw}>{preview ? "Bốc lại" : "Bốc thăm"}</Btn>}
 
         {preview && (
           <>
-            {format === "groups_ko" && <p className="text-[10px] font-bold text-gray-500">Chạm 2 đôi ở 2 bảng để đổi chỗ.</p>}
+            {format === "groups_ko" && <p className="text-xs font-medium text-slate-500">Chạm 2 đôi ở 2 bảng để đổi chỗ.</p>}
             <div className={`grid gap-2 ${keys.length > 1 ? "grid-cols-2" : ""}`}>
               {keys.map(k => (
-                <div key={k} className="border-2 border-black">
-                  <div className="bg-black text-white text-[10px] font-black px-2 py-0.5">{format === "rr" ? "Vòng tròn" : `Bảng ${k}`}</div>
+                <div key={k} className="rounded-lg border border-slate-200">
+                  <div className="bg-slate-900 text-white border-slate-900 text-xs font-semibold px-2 py-0.5">{format === "rr" ? "Vòng tròn" : `Bảng ${k}`}</div>
                   {(preview[k] || []).map(id => (
-                    <button key={id} type="button" onClick={() => clickEntry(id)} className={`block w-full text-left px-2 py-1 text-xs font-bold border-t border-gray-200 ${swapFirst === id ? "bg-blue-200" : ""}`}>
-                      {seeds.includes(id) && <span className="text-orange-600 mr-1">#{seeds.indexOf(id) + 1}</span>}{label(id)}
+                    <button key={id} type="button" onClick={() => clickEntry(id)} className={`block w-full text-left px-2 py-1 text-xs font-medium border-t border-slate-200 ${swapFirst === id ? "bg-blue-200" : ""}`}>
+                      {seeds.includes(id) && <span className="text-amber-600 mr-1">#{seeds.indexOf(id) + 1}</span>}{label(id)}
                     </button>
                   ))}
                 </div>
@@ -172,7 +172,7 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
 export default function BtcDraw({ data }: { data: TournamentData }) {
   const [tab, setTab] = useState(data.events[0]?.id || "");
   const event = data.events.find(e => e.id === tab) || data.events[0];
-  if (!event) return <Card title="Bốc thăm"><p className="text-xs font-bold">Chưa có nội dung.</p></Card>;
+  if (!event) return <Card title="Bốc thăm"><p className="text-xs font-medium">Chưa có nội dung.</p></Card>;
   return (
     <div className="flex flex-col gap-3">
       <Tabs value={event.id} onChange={setTab} items={data.events.map(e => ({ id: e.id, label: e.name }))} />

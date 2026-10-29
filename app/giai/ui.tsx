@@ -1,5 +1,5 @@
 "use client";
-// Khối giao diện dùng chung cho trang Giải đấu (cùng phong cách neo-brutalist của app)
+// Khối giao diện dùng chung cho trang Giải đấu (phong cách app thể thao: nền sáng, thẻ bo góc, nhấn xanh navy)
 import type { ReactNode } from "react";
 
 export function Btn({ children, onClick, tone = "white", small, disabled, type = "button", className = "" }: {
@@ -7,12 +7,16 @@ export function Btn({ children, onClick, tone = "white", small, disabled, type =
   small?: boolean; disabled?: boolean; type?: "button" | "submit"; className?: string;
 }) {
   const colors = {
-    white: "bg-white text-black", yellow: "bg-[#fcd34d] text-black", blue: "bg-blue-600 text-white",
-    red: "bg-red-500 text-white", green: "bg-green-500 text-white", black: "bg-black text-white",
+    white: "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50",
+    yellow: "bg-amber-400 text-slate-900 hover:bg-amber-300",
+    blue: "bg-blue-600 text-white hover:bg-blue-700",
+    red: "bg-white text-red-600 border border-red-200 hover:bg-red-50",
+    green: "bg-emerald-600 text-white hover:bg-emerald-700",
+    black: "bg-slate-900 text-white hover:bg-slate-800",
   }[tone];
   return (
     <button type={type} onClick={onClick} disabled={disabled}
-      className={`${colors} border-[3px] border-black font-black uppercase ${small ? "text-[10px] px-2 py-1 shadow-[2px_2px_0_0_#000]" : "text-xs px-3 py-2 shadow-[3px_3px_0_0_#000]"} active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all disabled:opacity-40 disabled:cursor-not-allowed ${className}`}>
+      className={`${colors} rounded-lg font-semibold inline-flex items-center justify-center gap-1.5 ${small ? "text-xs px-2.5 py-1.5" : "text-sm px-4 py-2.5"} shadow-sm active:scale-[0.98] transition disabled:opacity-40 disabled:cursor-not-allowed ${className}`}>
       {children}
     </button>
   );
@@ -20,23 +24,36 @@ export function Btn({ children, onClick, tone = "white", small, disabled, type =
 
 export function Card({ title, right, children, className = "" }: { title?: ReactNode; right?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <div className={`bg-white border-[3px] border-black shadow-[4px_4px_0_0_#000] ${className}`}>
+    <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden ${className}`}>
       {title && (
-        <div className="bg-black text-white text-[11px] font-black px-3 py-1.5 uppercase tracking-wider flex justify-between items-center gap-2">
-          <span className="truncate">{title}</span>{right}
+        <div className="px-4 pt-3.5 pb-2 flex justify-between items-center gap-2">
+          <span className="text-sm font-bold text-slate-900 truncate">{title}</span>{right}
         </div>
       )}
-      <div className="p-3">{children}</div>
+      <div className={title ? "px-4 pb-4" : "p-4"}>{children}</div>
     </div>
   );
 }
 
-export function Tabs<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { id: T; label: ReactNode }[] }) {
+// variant "pill": chọn nội dung / nhóm lớn; "line": thanh gạch chân cho tab con
+export function Tabs<T extends string>({ value, onChange, items, variant = "pill" }: { value: T; onChange: (v: T) => void; items: { id: T; label: ReactNode }[]; variant?: "pill" | "line" }) {
+  if (variant === "line") {
+    return (
+      <div className="flex gap-5 border-b border-slate-200 overflow-x-auto [scrollbar-width:none]">
+        {items.map(it => (
+          <button key={it.id} onClick={() => onChange(it.id)}
+            className={`shrink-0 -mb-px border-b-2 pb-2 pt-1 text-sm font-semibold whitespace-nowrap transition ${value === it.id ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+            {it.label}
+          </button>
+        ))}
+      </div>
+    );
+  }
   return (
-    <div className="flex gap-1 overflow-x-auto pb-1 [scrollbar-width:thin]">
+    <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]">
       {items.map(it => (
         <button key={it.id} onClick={() => onChange(it.id)}
-          className={`shrink-0 border-2 border-black px-3 py-1.5 text-[11px] font-black uppercase whitespace-nowrap ${value === it.id ? "bg-black text-white" : "bg-white hover:bg-gray-100"}`}>
+          className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold whitespace-nowrap transition ${value === it.id ? "bg-slate-900 text-white shadow-sm" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"}`}>
           {it.label}
         </button>
       ))}
@@ -47,10 +64,23 @@ export function Tabs<T extends string>({ value, onChange, items }: { value: T; o
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[10px] font-black uppercase mb-1 block">{label}</span>
+      <span className="text-xs font-medium text-slate-500 mb-1 block">{label}</span>
       {children}
     </label>
   );
 }
 
-export const inputCls = "w-full border-[3px] border-black p-2 text-sm font-bold bg-white focus:outline-none focus:bg-yellow-50";
+const PILL = {
+  gray: "bg-slate-100 text-slate-600", blue: "bg-blue-50 text-blue-700", green: "bg-emerald-50 text-emerald-700",
+  amber: "bg-amber-50 text-amber-700", red: "bg-red-50 text-red-600", live: "bg-red-600 text-white",
+} as const;
+export function Pill({ tone = "gray", children, className = "" }: { tone?: keyof typeof PILL; children: ReactNode; className?: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${PILL[tone]} ${className}`}>
+      {tone === "live" && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />}
+      {children}
+    </span>
+  );
+}
+
+export const inputCls = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 bg-white placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";

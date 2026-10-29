@@ -37,7 +37,7 @@ export function ClaimName({ data, uid, myParticipantIds }: { data: TournamentDat
   };
   return (
     <Card title={myParticipantIds.length ? "Thêm tên khác của tôi" : "Tôi là …"}>
-      <p className="text-[11px] font-bold text-gray-600 mb-2">Có người đã đăng ký giúp bạn? Chọn đúng tên mình để nhận thông báo tới lượt và xem trận của bạn.</p>
+      <p className="text-[11px] font-medium text-slate-600 mb-2">Có người đã đăng ký giúp bạn? Chọn đúng tên mình để nhận thông báo tới lượt và xem trận của bạn.</p>
       <div className="flex flex-col gap-2">
         <NameInput value={q} onChange={setQ} picked={picked} onPick={setPicked} people={free} placeholder="Gõ tên bạn…" />
         <Btn tone="blue" disabled={!picked || busy} onClick={claim}>Tôi là {picked?.name || "…"}</Btn>
@@ -111,10 +111,10 @@ export default function Register({ data, uid, myParticipantIds }: { data: Tourna
         <Card title="Đôi của tôi">
           <div className="flex flex-col gap-2">
             {myEntries.map(e => (
-              <div key={e.id} className="flex items-center gap-2 border-2 border-black p-2 text-xs">
+              <div key={e.id} className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 text-xs">
                 <div className="flex-1 min-w-0">
-                  <div className="font-black truncate">{events.find(x => x.id === e.event)?.name}: {entryLabel(e, participants)}</div>
-                  <div className={`font-bold ${e.status === "approved" ? "text-green-700" : e.status === "withdrawn" ? "text-gray-400" : "text-orange-600"}`}>{STATUS_LABEL[e.status]}</div>
+                  <div className="font-semibold truncate">{events.find(x => x.id === e.event)?.name}: {entryLabel(e, participants)}</div>
+                  <div className={`font-medium ${e.status === "approved" ? "text-emerald-700" : e.status === "withdrawn" ? "text-slate-400" : "text-amber-600"}`}>{STATUS_LABEL[e.status]}</div>
                 </div>
                 {e.createdBy === uid && e.status !== "withdrawn" && registrationOpen(t) && <Btn small tone="red" onClick={() => withdraw(e.id)}>Rút</Btn>}
               </div>
@@ -124,14 +124,14 @@ export default function Register({ data, uid, myParticipantIds }: { data: Tourna
       )}
 
       {registrationOpen(t) && (
-        <Card title={<><i className="fa-solid fa-pen-to-square mr-1"></i>Đăng ký thi đấu</>} right={t.regDeadline ? <span className="text-yellow-300 normal-case">Hạn: {new Date(t.regDeadline).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}</span> : null}>
+        <Card title={<><i className="fa-solid fa-pen-to-square mr-1"></i>Đăng ký thi đấu</>} right={t.regDeadline ? <span className="text-xs font-medium text-slate-400">Hạn: {new Date(t.regDeadline).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" })}</span> : null}>
           <div className="flex flex-col gap-3">
             {mine ? (
               myPeople.length > 1 ? (
                 <Field label="Đăng ký cho">
                   <select value={mine.id} onChange={e => setForId(e.target.value)} className={inputCls}>{myPeople.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
                 </Field>
-              ) : <p className="text-sm font-bold">Bạn: <span className="font-black">{mine.name}</span></p>
+              ) : <p className="text-sm font-medium">Bạn: <span className="font-semibold">{mine.name}</span></p>
             ) : (
               <>
                 <Field label="Tên của bạn">
@@ -141,7 +141,7 @@ export default function Register({ data, uid, myParticipantIds }: { data: Tourna
                   <>
                     <div className="flex gap-2">
                       {(["M", "F"] as const).map(g => (
-                        <button key={g} type="button" onClick={() => setGender(g)} className={`flex-1 border-[3px] border-black py-1.5 text-xs font-black uppercase ${gender === g ? (g === "M" ? "bg-blue-300" : "bg-pink-300") : "bg-gray-100"}`}>{g === "M" ? "♂ Nam" : "♀ Nữ"}</button>
+                        <button key={g} type="button" onClick={() => setGender(g)} className={`flex-1 rounded-lg border border-slate-300 py-1.5 text-xs font-semibold ${gender === g ? (g === "M" ? "bg-blue-600 text-white" : "bg-pink-500 text-white") : "bg-slate-100"}`}>{g === "M" ? "♂ Nam" : "♀ Nữ"}</button>
                       ))}
                     </div>
                     <Field label="Trình độ (tự đánh giá)">
@@ -154,7 +154,7 @@ export default function Register({ data, uid, myParticipantIds }: { data: Tourna
                 )}
               </>
             )}
-            {available.length === 0 ? <p className="text-xs font-bold text-gray-500">Không còn nội dung phù hợp để đăng ký.</p> : (
+            {available.length === 0 ? <p className="text-xs font-medium text-slate-500">Không còn nội dung phù hợp để đăng ký.</p> : (
               <>
                 <Field label="Nội dung">
                   <select value={ev?.id} onChange={e => setEventId(e.target.value)} className={inputCls}>
@@ -168,14 +168,14 @@ export default function Register({ data, uid, myParticipantIds }: { data: Tourna
                 {!pGender && !partnerPicked && (
                   <div className="flex gap-2">
                     {(["M", "F"] as const).map(g => (
-                      <button key={g} type="button" onClick={() => setOpenGender(g)} className={`flex-1 border-2 border-black py-1 text-[11px] font-black ${openGender === g ? "bg-black text-white" : "bg-white"}`}>Đồng đội {g === "M" ? "nam" : "nữ"}</button>
+                      <button key={g} type="button" onClick={() => setOpenGender(g)} className={`flex-1 rounded-lg border border-slate-200 py-1 text-[11px] font-semibold ${openGender === g ? "bg-slate-900 text-white border-slate-900" : "bg-white"}`}>Đồng đội {g === "M" ? "nam" : "nữ"}</button>
                     ))}
                   </div>
                 )}
-                <Btn tone="yellow" disabled={busy} onClick={submit}>{busy ? "Đang gửi…" : "Đăng ký"}</Btn>
+                <Btn tone="blue" disabled={busy} onClick={submit}>{busy ? "Đang gửi…" : "Đăng ký"}</Btn>
               </>
             )}
-            {done && <p className="text-xs font-black text-green-700">{done}</p>}
+            {done && <p className="text-xs font-semibold text-emerald-700">{done}</p>}
           </div>
         </Card>
       )}

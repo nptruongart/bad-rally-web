@@ -16,7 +16,7 @@ export default function JoinBtc({ code, onJoined }: { code: string; onJoined: ()
   };
   return (
     <Card title="Bạn là BTC giải này?">
-      <p className="text-[11px] font-bold text-gray-600 mb-2">Nhập mã BTC (xem ở máy BTC đang điều khiển giải) để cùng quản lý giải trên máy này.</p>
+      <p className="text-[11px] font-medium text-slate-600 mb-2">Nhập mã BTC (xem ở máy BTC đang điều khiển giải) để cùng quản lý giải trên máy này.</p>
       <div className="flex gap-2">
         <input value={btc} onChange={e => setBtc(e.target.value.toUpperCase())} maxLength={20} placeholder="Mã BTC" className={`${inputCls} tracking-widest`} />
         <Btn tone="black" disabled={btc.trim().length < 6 || busy} onClick={join}>Vào</Btn>

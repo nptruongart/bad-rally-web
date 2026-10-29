@@ -6,8 +6,8 @@ import { planQueue, type BlockReason } from "../../lib/tournament/dispatch";
 import { callMatch, inversePatches, uncallMatch, type Patch } from "../../lib/tournament/actions";
 import { entryLabel } from "../../lib/tournament/view";
 import ScoreDialog from "./ScoreDialog";
-import { scoreText } from "./EventView";
-import { Btn, Card } from "./ui";
+import { MatchRow, scoreText } from "./EventView";
+import { Btn, Card, Pill } from "./ui";
 
 const nowMs = () => Date.now();
 
@@ -51,46 +51,52 @@ export default function BtcDispatch({ data, uid, write }: { data: TournamentData
 
   return (
     <div className="flex flex-col gap-3 pb-20">
-      {data.t.status !== "running" && <p className="text-xs font-black text-orange-600">Giải chưa ở trạng thái “Đang thi đấu” (đổi ở tab Giải).</p>}
+      {data.t.status !== "running" && <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Giải chưa ở trạng thái “Đang thi đấu” (đổi ở tab Giải).</p>}
 
-      <Card title={`Sân (${freeCourts.length}/${data.t.courts.length} trống)`}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <Card title="Sân thi đấu" right={<Pill tone={freeCourts.length ? "green" : "gray"}>{freeCourts.length}/{data.t.courts.length} trống</Pill>}>
+        <div className="grid grid-cols-2 gap-2">
           {data.t.courts.map(c => {
             const m = onCourt(c.id);
+            const mins = m ? Math.max(0, Math.floor((now - m.calledAt) / 60000)) : 0;
             return (
-              <div key={c.id} className={`border-[3px] border-black p-2 ${m ? "bg-green-50" : "bg-gray-50"}`}>
-                <div className="flex justify-between items-center"><span className="font-black text-sm">{c.name}</span>{m && <span className="text-[10px] font-black text-gray-500">{evName(m)}</span>}</div>
+              <div key={c.id} className={`rounded-xl border p-2.5 ${m ? "border-red-200 bg-white" : "border-dashed border-slate-300 bg-slate-50"}`}>
+                <div className="flex justify-between items-center gap-2">
+                  <span className="font-bold text-slate-900">{c.name}</span>
+                  {m ? <Pill tone="live">{mins} phút</Pill> : <Pill tone="green">Trống</Pill>}
+                </div>
                 {m ? (
                   <>
-                    <div className="text-xs font-bold mt-1">{label(m.entryA)}<br />{label(m.entryB)}</div>
-                    <div className="flex gap-1 mt-2">
-                      <Btn small tone="green" className="flex-1" onClick={() => setScoring(m.id)}>Nhập tỉ số</Btn>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mt-1">{evName(m)} · {m.stage === "ko" ? "Nhánh" : `Bảng ${m.group}`}</div>
+                    <div className="text-sm font-semibold text-slate-800 mt-0.5 leading-snug">{label(m.entryA)}<div className="text-[11px] text-slate-400 font-normal">vs</div>{label(m.entryB)}</div>
+                    <div className="flex flex-col gap-1.5 mt-3">
+                      <Btn small tone="blue" onClick={() => setScoring(m.id)}><i className="fa-solid fa-pen"></i>Nhập tỉ số</Btn>
                       <Btn small onClick={() => apply([uncallMatch(m)], `Đã trả trận về hàng chờ`)}>Trả lại</Btn>
                     </div>
                   </>
-                ) : <div className="text-xs font-bold text-gray-400 mt-1">Trống</div>}
+                ) : <div className="text-sm text-slate-400 mt-1">Chưa có trận</div>}
               </div>
             );
           })}
         </div>
       </Card>
 
-      <Card title={`Sẵn sàng (${ready.length})`}>
-        {ready.length === 0 ? <p className="text-xs font-bold text-gray-500">Không có trận nào sẵn sàng.</p> : (
+      <Card title="Sẵn sàng gọi" right={<Pill tone="blue">{ready.length} trận</Pill>}>
+        {ready.length === 0 ? <p className="text-sm text-slate-500">Không có trận nào sẵn sàng.</p> : (
           <div className="flex flex-col gap-2">
             {ready.map((m, i) => (
-              <div key={m.id} className={`border-2 border-black p-2 text-xs ${i === 0 ? "bg-yellow-100" : ""}`}>
-                <div className="flex justify-between text-[10px] font-black uppercase text-gray-500">
-                  <span>{evName(m)} · {m.stage === "ko" ? "Nhánh" : `Bảng ${m.group}`} · vòng {m.round}</span>{i === 0 && <span className="text-orange-600">Gợi ý</span>}
+              <div key={m.id} className={`rounded-xl border p-3 ${i === 0 ? "border-blue-300 bg-blue-50/60" : "border-slate-200"}`}>
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{evName(m)} · {m.stage === "ko" ? "Nhánh" : `Bảng ${m.group}`} · Vòng {m.round}</span>
+                  {i === 0 && <Pill tone="amber"><i className="fa-solid fa-star text-[9px]"></i>Gợi ý</Pill>}
                 </div>
-                <div className="font-bold mt-0.5">{label(m.entryA)} <span className="text-gray-400">vs</span> {label(m.entryB)}</div>
-                <div className="flex gap-1 mt-1">
+                <div className="text-sm font-semibold text-slate-800 mt-1">{label(m.entryA)} <span className="text-slate-400 font-normal mx-0.5">vs</span> {label(m.entryB)}</div>
+                <div className="flex gap-1.5 mt-2">
                   {freeCourts.length > 1 && (
-                    <select value={pickCourt[m.id] || freeCourts[0].id} onChange={e => setPickCourt({ ...pickCourt, [m.id]: Number(e.target.value) })} className="border-2 border-black text-xs font-bold px-1">
+                    <select value={pickCourt[m.id] || freeCourts[0].id} onChange={e => setPickCourt({ ...pickCourt, [m.id]: Number(e.target.value) })} className="rounded-lg border border-slate-300 text-xs font-medium px-2 bg-white">
                       {freeCourts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   )}
-                  <Btn small tone="blue" disabled={freeCourts.length === 0} onClick={() => call(m)}>Gọi{freeCourts.length === 1 ? ` vào ${freeCourts[0].name}` : ""}</Btn>
+                  <Btn small tone="blue" disabled={freeCourts.length === 0} onClick={() => call(m)}><i className="fa-solid fa-bullhorn"></i>Gọi{freeCourts.length === 1 ? ` vào ${freeCourts[0].name}` : ""}</Btn>
                 </div>
               </div>
             ))}
@@ -99,36 +105,36 @@ export default function BtcDispatch({ data, uid, write }: { data: TournamentData
       </Card>
 
       {blocked.length > 0 && (
-        <Card title={`Bị khóa (${blocked.length})`}>
-          <div className="flex flex-col gap-2">
+        <Card title="Đang chờ" right={<Pill>{blocked.length} trận</Pill>}>
+          <div className="flex flex-col divide-y divide-slate-100 -mx-4 border-y border-slate-100">
             {blocked.map(({ match: m, reason }) => (
-              <div key={m.id} className="border-2 border-gray-400 p-2 text-xs text-gray-600">
-                <div className="font-bold">{evName(m)}: {label(m.entryA)} vs {label(m.entryB)}</div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="flex-1 font-black text-orange-600">{reasonText(reason)}</span>
-                  {reason.kind === "rest" && <Btn small disabled={freeCourts.length === 0} onClick={() => call(m, true)}>Gọi luôn</Btn>}
+              <div key={m.id} className="px-4 py-2.5 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-slate-700 truncate"><span className="text-slate-400">{evName(m)}:</span> {label(m.entryA)} vs {label(m.entryB)}</div>
+                  <div className="text-xs font-medium text-amber-600 mt-0.5"><i className={`fa-solid ${reason.kind === "rest" ? "fa-mug-hot" : "fa-person-running"} mr-1`}></i>{reasonText(reason)}</div>
                 </div>
+                {reason.kind === "rest" && <Btn small disabled={freeCourts.length === 0} onClick={() => call(m, true)}>Gọi luôn</Btn>}
               </div>
             ))}
           </div>
         </Card>
       )}
 
-      <Card title="Trận đã xong (chạm để sửa)">
-        <div className="flex flex-col gap-1">
+      <Card title="Đã xong" right={<span className="text-xs text-slate-400">Chạm để sửa tỉ số</span>}>
+        <div className="flex flex-col gap-2">
           {data.matches.filter(m => m.status === "done" || m.status === "walkover").sort((a, b) => b.finishedAt - a.finishedAt).slice(0, 30).map(m => (
-            <button key={m.id} onClick={() => m.status === "done" && setScoring(m.id)} className="text-left border border-gray-300 px-2 py-1 text-xs font-bold flex justify-between gap-2">
-              <span className="truncate">{evName(m)}: {label(m.entryA)} vs {label(m.entryB)}</span><span className="shrink-0">{scoreText(m)}</span>
+            <button key={m.id} onClick={() => m.status === "done" && setScoring(m.id)} className="text-left hover:opacity-80">
+              <MatchRow m={m} data={data} ko={data.matches.filter(x => x.event === m.event && x.stage === "ko")} caption={`${evName(m)} · ${m.stage === "ko" ? "Nhánh" : `Bảng ${m.group}`}`} compact />
             </button>
           ))}
         </div>
       </Card>
 
       {undo && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-md z-[90] bg-black text-white border-[3px] border-black shadow-[4px_4px_0_0_#facc15] flex items-center gap-2 px-3 py-2">
-          <span className="flex-1 min-w-0 text-xs font-bold truncate">{undo.label}</span>
-          <button onClick={() => { write(undo.patches); setUndo(null); }} className="shrink-0 bg-yellow-300 text-black border-2 border-white px-2 py-1 text-[11px] font-black uppercase">Hoàn tác</button>
-          <button onClick={() => setUndo(null)} className="shrink-0 text-gray-400 px-1" aria-label="close"><i className="fa-solid fa-xmark"></i></button>
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-md z-[90] bg-slate-900 text-white rounded-xl shadow-xl flex items-center gap-2 px-3 py-2">
+          <span className="flex-1 min-w-0 text-xs font-medium truncate">{undo.label}</span>
+          <button onClick={() => { write(undo.patches); setUndo(null); }} className="shrink-0 bg-amber-400 text-slate-900 rounded-md px-2.5 py-1 text-xs font-semibold">Hoàn tác</button>
+          <button onClick={() => setUndo(null)} className="shrink-0 text-slate-400 px-1" aria-label="close"><i className="fa-solid fa-xmark"></i></button>
         </div>
       )}
 

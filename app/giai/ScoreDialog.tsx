@@ -46,31 +46,44 @@ export default function ScoreDialog({ match, data, uid, onSave, onWithdraw, onCl
   const set = (i: number, side: 0 | 1, v: string) => setGames(gs => gs.map((g, j) => (j === i ? (side === 0 ? [v.replace(/\D/g, "").slice(0, 2), g[1]] : [g[0], v.replace(/\D/g, "").slice(0, 2)]) : g)));
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/70 flex items-end sm:items-center justify-center p-3" onClick={onClose}>
-      <div className="bg-white border-[4px] border-black shadow-[6px_6px_0_0_#facc15] w-full max-w-sm p-4 flex flex-col gap-3" onClick={e => e.stopPropagation()}>
-        <div className="text-[10px] font-black uppercase text-gray-500">{event.name}{court ? ` · ${court}` : ""} · {rule.games === 1 ? "1 set" : "2/3 set"} {rule.points} điểm</div>
-        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-2 gap-y-1 items-center">
-          <span></span>
-          {games.map((_, i) => <span key={i} className="text-[10px] font-black text-center w-12">Set {i + 1}</span>)}
-          {Array.from({ length: 3 - games.length }, (_, i) => <span key={`x${i}`} />)}
-          {(["a", "b"] as const).map((side, s) => (
-            <div key={side} className="contents">
-              <span className="text-sm font-black truncate">{label(side === "a" ? match.entryA : match.entryB)}</span>
-              {games.map((g, i) => (
-                <input key={i} value={g[s]} onChange={e => set(i, s as 0 | 1, e.target.value)} inputMode="numeric"
-                  className="w-12 border-[3px] border-black text-center text-lg font-black p-1 focus:bg-yellow-50 focus:outline-none" />
-              ))}
-              {Array.from({ length: 3 - games.length }, (_, i) => <span key={`y${i}`} />)}
+    <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-3" onClick={onClose}>
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="bg-slate-900 text-white px-5 pt-4 pb-3 flex items-start justify-between gap-2">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-white/50">{rule.games === 1 ? "1 set" : "2/3 set"} · {rule.points} điểm (trần {rule.cap})</div>
+            <div className="font-bold">{event.name}{court ? ` · ${court}` : ""}</div>
+          </div>
+          <button onClick={onClose} aria-label="Đóng" className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 inline-flex items-center justify-center"><i className="fa-solid fa-xmark"></i></button>
+        </div>
+        <div className="p-5 flex flex-col gap-4">
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-2 gap-y-2 items-center">
+            <span></span>
+            {games.map((_, i) => <span key={i} className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 text-center w-14">Set {i + 1}</span>)}
+            {Array.from({ length: 3 - games.length }, (_, i) => <span key={`x${i}`} />)}
+            {(["a", "b"] as const).map((side, s) => (
+              <div key={side} className="contents">
+                <span className="text-sm font-bold text-slate-900 truncate">{label(side === "a" ? match.entryA : match.entryB)}</span>
+                {games.map((g, i) => {
+                  const win = g[s] !== "" && g[1 - s] !== "" && Number(g[s]) > Number(g[1 - s]);
+                  return (
+                    <input key={i} value={g[s]} onChange={e => set(i, s as 0 | 1, e.target.value)} inputMode="numeric" placeholder="0"
+                      className={`w-14 h-14 rounded-xl border-2 text-center text-2xl font-bold tabular-nums placeholder:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 ${win ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-900"}`} />
+                  );
+                })}
+                {Array.from({ length: 3 - games.length }, (_, i) => <span key={`y${i}`} />)}
+              </div>
+            ))}
+          </div>
+          {canAddGame && <Btn small onClick={() => setGames([...games, ["", ""]])}><i className="fa-solid fa-plus"></i>Thêm set</Btn>}
+          <Btn tone="blue" className="!py-3" onClick={() => save()}><i className="fa-solid fa-check"></i>Lưu kết quả</Btn>
+          <div className="border-t border-slate-100 pt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Bỏ cuộc</div>
+            <div className="flex gap-2">
+              <Btn small tone="red" className="flex-1 min-w-0" onClick={() => withdraw(match.entryA)}><span className="truncate">{label(match.entryA)}</span></Btn>
+              <Btn small tone="red" className="flex-1 min-w-0" onClick={() => withdraw(match.entryB)}><span className="truncate">{label(match.entryB)}</span></Btn>
             </div>
-          ))}
+          </div>
         </div>
-        {canAddGame && <Btn small onClick={() => setGames([...games, ["", ""]])}>+ Thêm set</Btn>}
-        <Btn tone="green" onClick={() => save()}>Lưu kết quả</Btn>
-        <div className="flex gap-2">
-          <Btn small tone="red" className="flex-1" onClick={() => withdraw(match.entryA)}>Đội trên bỏ cuộc</Btn>
-          <Btn small tone="red" className="flex-1" onClick={() => withdraw(match.entryB)}>Đội dưới bỏ cuộc</Btn>
-        </div>
-        <Btn small onClick={onClose}>Đóng</Btn>
       </div>
     </div>
   );

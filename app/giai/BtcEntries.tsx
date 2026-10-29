@@ -8,7 +8,7 @@ import NameInput from "./NameInput";
 import { errText } from "./BtcSetup";
 import { Btn, Card, Field, Tabs, inputCls } from "./ui";
 
-const STATUS = { pending: ["Chờ duyệt", "bg-orange-100 text-orange-700"], approved: ["Đã duyệt", "bg-green-100 text-green-700"], waitlist: ["Danh sách chờ", "bg-gray-200 text-gray-700"], withdrawn: ["Đã rút", "bg-gray-100 text-gray-400"] } as const;
+const STATUS = { pending: ["Chờ duyệt", "bg-orange-100 text-orange-700"], approved: ["Đã duyệt", "bg-green-100 text-emerald-700"], waitlist: ["Danh sách chờ", "bg-slate-200 text-slate-700"], withdrawn: ["Đã rút", "bg-slate-100 text-slate-400"] } as const;
 const ORDER = { approved: 0, pending: 1, waitlist: 2, withdrawn: 3 } as const;
 
 // Chọn người có sẵn hoặc gõ tên mới (kèm giới tính)
@@ -18,7 +18,7 @@ function PersonPicker({ label, people, value, onChange }: { label: string; peopl
       <NameInput value={value.name} onChange={name => onChange({ ...value, name })} picked={value.picked} onPick={picked => onChange({ ...value, picked })} people={people} placeholder="Chọn hoặc gõ tên mới" />
       {!value.picked && (
         <div className="flex gap-1 mt-1">
-          {(["M", "F"] as const).map(g => <button key={g} type="button" onClick={() => onChange({ ...value, gender: g })} className={`flex-1 border-2 border-black text-[10px] font-black py-0.5 ${value.gender === g ? "bg-black text-white" : "bg-white"}`}>{g === "M" ? "Nam" : "Nữ"}</button>)}
+          {(["M", "F"] as const).map(g => <button key={g} type="button" onClick={() => onChange({ ...value, gender: g })} className={`flex-1 rounded-lg border border-slate-200 text-xs font-semibold py-0.5 ${value.gender === g ? "bg-slate-900 text-white border-slate-900" : "bg-white"}`}>{g === "M" ? "Nam" : "Nữ"}</button>)}
         </div>
       )}
     </Field>
@@ -37,15 +37,15 @@ function EntryRow({ e, data, event }: { e: Entry; data: TournamentData; event: T
   const drawn = !!event.stage && event.stage !== "registration";
   const [label, cls] = STATUS[e.status];
   return (
-    <div className="border-2 border-black p-2 text-xs flex flex-col gap-1">
+    <div className="rounded-lg border border-slate-200 p-2 text-xs flex flex-col gap-1">
       <div className="flex items-center gap-2">
-        <span className="flex-1 min-w-0 font-black truncate">{entryLabel(e, data.participants)}</span>
-        <span className={`shrink-0 px-1.5 py-0.5 text-[10px] font-black ${cls}`}>{label}</span>
+        <span className="flex-1 min-w-0 font-semibold truncate">{entryLabel(e, data.participants)}</span>
+        <span className={`shrink-0 px-1.5 py-0.5 text-xs font-semibold ${cls}`}>{label}</span>
       </div>
       <div className="flex flex-wrap gap-1 items-center">
         {(e.status === "pending" || e.status === "waitlist") && <Btn small tone="green" onClick={() => upd({ status: "approved" })}>Duyệt</Btn>}
         {e.status === "approved" && !drawn && <Btn small onClick={() => upd({ status: "pending" })}>Bỏ duyệt</Btn>}
-        <label className="flex items-center gap-1 font-bold ml-1"><input type="checkbox" checked={e.paid} onChange={ev => upd({ paid: ev.target.checked })} />Lệ phí</label>
+        <label className="flex items-center gap-1 font-medium ml-1"><input type="checkbox" checked={e.paid} onChange={ev => upd({ paid: ev.target.checked })} />Lệ phí</label>
         <span className="flex-1"></span>
         <Btn small onClick={() => setEdit(!edit)}><i className="fa-solid fa-user-pen"></i></Btn>
         {!drawn && <Btn small tone="red" onClick={del}><i className="fa-solid fa-trash-can"></i></Btn>}
@@ -53,7 +53,7 @@ function EntryRow({ e, data, event }: { e: Entry; data: TournamentData; event: T
       {edit && (
         <div className="grid grid-cols-2 gap-1 mt-1">
           {[[p1, setP1], [p2, setP2]].map(([v, set], i) => (
-            <select key={i} value={v as string} onChange={ev => (set as (s: string) => void)(ev.target.value)} className="border-2 border-black p-1 text-xs font-bold">
+            <select key={i} value={v as string} onChange={ev => (set as (s: string) => void)(ev.target.value)} className="rounded-lg border border-slate-200 p-1 text-xs font-medium">
               {data.participants.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           ))}
@@ -79,7 +79,7 @@ function AddEntry({ data, event }: { data: TournamentData; event: TEvent }) {
     } catch (e) { alert("Không thêm được đôi: " + errText(e)); }
   };
   return (
-    <div className="border-2 border-dashed border-black p-2 flex flex-col gap-2 bg-yellow-50">
+    <div className="rounded-xl border border-dashed border-slate-300 p-2 flex flex-col gap-2 bg-amber-50/60">
       <div className="grid grid-cols-2 gap-2">
         <PersonPicker label="Người 1" people={data.participants} value={a} onChange={setA} />
         <PersonPicker label="Người 2" people={data.participants} value={b} onChange={setB} />
@@ -142,8 +142,8 @@ function People({ data }: { data: TournamentData }) {
           {sorted.map(p => (
             <div key={p.id} className="flex items-center gap-2 py-1.5 text-xs">
               <div className="flex-1 min-w-0">
-                <div className="font-black truncate">{p.name} <span className={p.gender === "F" ? "text-pink-500" : "text-blue-500"}>{p.gender === "F" ? "♀" : "♂"}</span></div>
-                <div className="font-bold text-gray-500">{phones[p.id] || "—"} · {data.entries.filter(e => (e.p1 === p.id || e.p2 === p.id) && e.status !== "withdrawn").length} đôi · {p.users.length} máy</div>
+                <div className="font-semibold truncate">{p.name} <span className={p.gender === "F" ? "text-pink-500" : "text-blue-500"}>{p.gender === "F" ? "♀" : "♂"}</span></div>
+                <div className="font-medium text-slate-500">{phones[p.id] || "—"} · {data.entries.filter(e => (e.p1 === p.id || e.p2 === p.id) && e.status !== "withdrawn").length} đôi · {p.users.length} máy</div>
               </div>
               <Btn small onClick={() => rename(p)}><i className="fa-solid fa-pen"></i></Btn>
               {p.users.length > 0 && <Btn small onClick={() => clearDevices(p)}>Gỡ máy</Btn>}
@@ -165,7 +165,7 @@ export default function BtcEntries({ data }: { data: TournamentData }) {
       {event ? (
         <Card title={`${event.name}: ${list.filter(e => e.status === "approved").length}/${event.maxEntries} đôi đã duyệt`}>
           <div className="flex flex-col gap-2">
-            {list.length === 0 && <p className="text-xs font-bold text-gray-500">Chưa có đôi nào.</p>}
+            {list.length === 0 && <p className="text-xs font-medium text-slate-500">Chưa có đôi nào.</p>}
             {list.map(e => <EntryRow key={e.id} e={e} data={data} event={event} />)}
             <AddEntry data={data} event={event} />
           </div>

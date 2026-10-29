@@ -1,124 +1,225 @@
 "use client";
 // Xem một nội dung: Lịch / Bảng xếp hạng / Nhánh (dùng cho cả khán giả, người chơi và BTC)
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { TournamentData, TEvent, TMatch } from "../../lib/tournament/store";
 import { entryLabel, groupStandings, koRoundName } from "../../lib/tournament/view";
 import { GROUP_KEYS } from "../../lib/tournament/draw";
-import { Card, Tabs } from "./ui";
+import { Card, Pill, Tabs } from "./ui";
 
 export const scoreText = (m: TMatch) =>
   m.status === "walkover" ? "W/O" : m.scores.length ? m.scores.map(g => `${g[0]}-${g[1]}`).join(", ") : "";
 
-const STATUS_TEXT: Record<TMatch["status"], string> = {
-  pending: "Chưa đánh", ready: "Chưa đánh", called: "Đang gọi", playing: "Đang đánh", done: "Xong", walkover: "Xử thắng",
-};
+const isLive = (m: TMatch) => m.status === "called" || m.status === "playing";
+const isDone = (m: TMatch) => m.status === "done" || m.status === "walkover";
 
 // Mô tả nguồn đội ở trận nhánh chưa có đội
 function feedText(m: TMatch, side: "a" | "b", ko: TMatch[]): string {
   const f = m.feeds?.[side];
-  if (!f) return "…";
+  if (!f) return "Chờ xác định";
   if ("group" in f) return `${f.place === 1 ? "Nhất" : "Nhì"} bảng ${f.group}`;
   const src = ko[f.match];
   const total = Math.max(...ko.map(x => x.round));
-  return src ? `Thắng ${koRoundName(src.round, total).toLowerCase()} ${src.order + 1}` : "…";
+  return src ? `Thắng ${koRoundName(src.round, total).toLowerCase()} ${src.order + 1}` : "Chờ xác định";
 }
 
-export function MatchRow({ m, data, ko, highlight }: { m: TMatch; data: TournamentData; ko: TMatch[]; highlight?: boolean }) {
-  const e = (id: string) => data.entries.find(x => x.id === id);
+export function StatusPill({ m, data }: { m: TMatch; data: TournamentData }) {
   const court = data.t.courts.find(c => c.id === m.court)?.name;
-  const side = (id: string, s: "a" | "b") => (id ? entryLabel(e(id), data.participants) : <span className="text-gray-400 italic">{feedText(m, s, ko)}</span>);
+  if (isLive(m)) return <Pill tone="live">{court || "Đang đấu"}</Pill>;
+  if (m.status === "walkover") return <Pill tone="amber">Xử thắng</Pill>;
+  if (m.status === "done") return <Pill>Kết thúc</Pill>;
+  return <Pill tone="gray" className="!bg-transparent !px-0 text-slate-400">Chưa đánh</Pill>;
+}
+
+// Thẻ trận dạng bảng điểm: 2 dòng đội, mỗi set một cột, đội thắng in đậm
+export function MatchRow({ m, data, ko, highlight, caption, compact }: { m: TMatch; data: TournamentData; ko: TMatch[]; highlight?: boolean; caption?: ReactNode; compact?: boolean }) {
+  const e = (id: string) => data.entries.find(x => x.id === id);
+  const ev = data.events.find(x => x.id === m.event);
+  const cap = caption ?? (m.stage === "group" ? (ev?.format === "rr" ? `Vòng ${m.round}` : `Bảng ${m.group} · Vòng ${m.round}`) : koRoundName(m.round, Math.max(...ko.map(x => x.round))));
+  const line = (s: "a" | "b") => {
+    const id = s === "a" ? m.entryA : m.entryB;
+    const won = m.winner === s;
+    const lost = isDone(m) && m.winner && !won;
+    return (
+      <div className={`flex items-center gap-2 ${compact ? "py-1" : "py-1.5"}`}>
+        <span className={`w-1 self-stretch rounded-full ${won ? "bg-blue-600" : "bg-transparent"}`} />
+        <span className={`flex-1 min-w-0 truncate ${compact ? "text-[13px]" : "text-sm"} ${won ? "font-bold text-slate-900" : lost ? "text-slate-400" : "font-medium text-slate-800"}`}>
+          {id ? entryLabel(e(id), data.participants) : <span className="italic text-slate-400 font-normal">{feedText(m, s, ko)}</span>}
+        </span>
+        {m.status === "walkover" ? (
+          <span className={`w-9 text-center text-xs font-bold ${won ? "text-blue-700" : "text-slate-300"}`}>{won ? "W" : "–"}</span>
+        ) : m.scores.map((g, i) => {
+          const mine = g[s === "a" ? 0 : 1], other = g[s === "a" ? 1 : 0];
+          return <span key={i} className={`w-7 text-center tabular-nums ${compact ? "text-[13px]" : "text-sm"} ${mine > other ? "font-bold text-slate-900" : "text-slate-400"}`}>{mine}</span>;
+        })}
+      </div>
+    );
+  };
   return (
-    <div className={`border-2 border-black p-2 text-xs ${highlight ? "bg-yellow-100" : "bg-white"}`}>
-      <div className="flex justify-between gap-2 text-[10px] font-black uppercase text-gray-500">
-        <span>{m.stage === "group" ? (data.events.find(ev => ev.id === m.event)?.format === "rr" ? `Vòng ${m.round}` : `Bảng ${m.group} · vòng ${m.round}`) : ""}</span>
-        <span className={m.status === "playing" || m.status === "called" ? "text-green-700" : ""}>{STATUS_TEXT[m.status]}{court && (m.status === "called" || m.status === "playing") ? ` · ${court}` : ""}</span>
+    <div className={`rounded-xl border ${highlight ? "border-blue-300 bg-blue-50/50 ring-1 ring-blue-200" : isLive(m) ? "border-red-200 bg-white" : "border-slate-200 bg-white"} ${compact ? "px-2.5 py-1.5" : "px-3 py-2"}`}>
+      <div className="flex justify-between items-center gap-2 mb-0.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 truncate">{cap}</span>
+        <StatusPill m={m} data={data} />
       </div>
-      <div className="flex justify-between gap-2 mt-1">
-        <div className="min-w-0 font-bold">
-          <div className={m.winner === "a" ? "text-blue-700" : ""}>{m.winner === "a" && "🏆 "}{side(m.entryA, "a")}</div>
-          <div className={m.winner === "b" ? "text-blue-700" : ""}>{m.winner === "b" && "🏆 "}{side(m.entryB, "b")}</div>
+      <div className="divide-y divide-slate-100">{line("a")}{line("b")}</div>
+    </div>
+  );
+}
+
+function Standings({ event, g, data, matches, myEntryIds }: { event: TEvent; g: string; data: TournamentData; matches: TMatch[]; myEntryIds: string[] }) {
+  const rows = groupStandings(event, g, data.entries, matches, data.t.settings.walkover_mode);
+  const sign = (n: number) => (n > 0 ? `+${n}` : String(n));
+  return (
+    <Card title={event.format === "rr" ? "Bảng xếp hạng" : `Bảng ${g}`} right={event.format === "groups_ko" ? <span className="text-xs text-slate-400">Lấy {event.advance} đôi</span> : undefined}>
+      <div className="-mx-4">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wide text-slate-400 bg-slate-50 border-y border-slate-100">
+              <th className="py-1.5 pl-4 pr-1 text-left font-semibold w-8">#</th>
+              <th className="text-left font-semibold">Đôi</th>
+              <th className="font-semibold w-8">Tr</th><th className="font-semibold w-8">T</th>
+              <th className="font-semibold w-10">Set</th><th className="font-semibold w-12 pr-4">Điểm</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const e = data.entries.find(x => x.id === r.entry);
+              const goes = event.format === "groups_ko" && r.rank <= (event.advance || 0);
+              const out = e?.status === "withdrawn";
+              return (
+                <tr key={r.entry} className={`border-b border-slate-100 last:border-0 ${myEntryIds.includes(r.entry) ? "bg-blue-50/60" : ""} ${out ? "line-through text-slate-400" : "text-slate-800"}`}>
+                  <td className="py-2 pl-4 pr-1">
+                    <span className={`inline-flex w-6 h-6 items-center justify-center rounded-md text-xs font-bold ${goes ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"}`}>{r.rank}</span>
+                    {r.byLot && <span title="Bốc thăm" className="text-amber-500 font-bold">*</span>}
+                  </td>
+                  <td className="font-semibold truncate max-w-[150px]">{entryLabel(e, data.participants)}</td>
+                  <td className="text-center tabular-nums text-slate-500">{r.played}</td>
+                  <td className="text-center tabular-nums font-bold">{r.won}</td>
+                  <td className="text-center tabular-nums text-slate-500">{sign(r.gameDiff)}</td>
+                  <td className="text-center tabular-nums text-slate-500 pr-4">{sign(r.pointDiff)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[11px] text-slate-400">
+        <span>Tr: trận · T: thắng · Set/Điểm: hiệu số</span>
+        {event.format === "groups_ko" && <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-600" />Vào vòng loại</span>}
+        {rows.some(r => r.byLot) && <span className="text-amber-600">* Phân hạng bằng bốc thăm</span>}
+      </div>
+    </Card>
+  );
+}
+
+// Sơ đồ nhánh: mỗi vòng một cột, trận vòng sau nằm giữa hai trận nuôi nó; kéo ngang trên điện thoại
+function Bracket({ ko, data, mine }: { ko: TMatch[]; data: TournamentData; mine: (m: TMatch) => boolean }) {
+  const rounds = Math.max(...ko.map(m => m.round));
+  const final = ko.find(m => m.round === rounds);
+  const champ = final && isDone(final) && final.winner ? (final.winner === "a" ? final.entryA : final.entryB) : "";
+  return (
+    <div className="flex flex-col gap-3">
+      {champ && (
+        <div className="rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-900 px-4 py-3 flex items-center gap-3 shadow-sm">
+          <i className="fa-solid fa-trophy text-2xl"></i>
+          <div><div className="text-[11px] font-semibold uppercase tracking-wide opacity-70">Vô địch</div><div className="font-bold">{entryLabel(data.entries.find(e => e.id === champ), data.participants)}</div></div>
         </div>
-        <div className="shrink-0 font-black text-right self-center">{scoreText(m)}</div>
+      )}
+      <div className="overflow-x-auto -mx-3 px-3 pb-2">
+        <div className="flex gap-4 min-w-max">
+          {Array.from({ length: rounds }, (_, i) => i + 1).map(r => (
+            <div key={r} className="w-[44vw] min-w-[160px] max-w-[230px] flex flex-col">
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 text-center">{koRoundName(r, rounds)}</div>
+              <div className="flex-1 flex flex-col justify-around gap-3">
+                {ko.filter(m => m.round === r).map(m => (
+                  <div key={m.id} className="relative">
+                    <MatchRow m={m} data={data} ko={ko} highlight={mine(m)} caption={`Trận ${m.order + 1}`} compact />
+                    {r < rounds && <span className="absolute top-1/2 -right-4 w-4 border-t border-slate-300" />}
+                    {r > 1 && <span className="absolute top-1/2 -left-4 w-4 border-t border-slate-300" />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
+      {rounds >= 2 && <p className="text-xs text-slate-400">Hai đôi thua bán kết đồng hạng ba.</p>}
     </div>
   );
 }
 
 export default function EventView({ event, data, myEntryIds = [] }: { event: TEvent; data: TournamentData; myEntryIds?: string[] }) {
   const [tab, setTab] = useState<"schedule" | "table" | "bracket">("schedule");
+  const [filter, setFilter] = useState<"all" | "live" | "todo" | "done">("all");
   const matches = data.matches.filter(m => m.event === event.id);
   const groupMatches = matches.filter(m => m.stage === "group").sort((a, b) => a.round - b.round || a.order - b.order);
   const ko = matches.filter(m => m.stage === "ko").sort((a, b) => a.round - b.round || a.order - b.order);
-  const koRounds = ko.length ? Math.max(...ko.map(m => m.round)) : 0;
   const groups = event.format === "rr" ? ["A"] : GROUP_KEYS.slice(0, event.groups || 0);
   const approved = data.entries.filter(e => e.event === event.id && e.status === "approved");
   const mine = (m: TMatch) => myEntryIds.includes(m.entryA) || myEntryIds.includes(m.entryB);
 
   if (matches.length === 0) {
     return (
-      <Card title={`${event.name} · ${approved.length} đôi`}>
-        {approved.length === 0 ? <p className="text-xs font-bold text-gray-500">Chưa có đôi nào được duyệt.</p> : (
-          <ol className="text-sm font-bold list-decimal pl-5 space-y-0.5">
-            {approved.map(e => <li key={e.id}>{entryLabel(e, data.participants)}</li>)}
+      <Card title={`${event.name}`} right={<Pill>{approved.length} đôi</Pill>}>
+        {approved.length === 0 ? <p className="text-sm text-slate-500">Chưa có đôi nào được duyệt.</p> : (
+          <ol className="divide-y divide-slate-100 -mx-4 border-y border-slate-100">
+            {approved.map((e, i) => (
+              <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                <span className="w-6 h-6 rounded-md bg-slate-100 text-slate-500 text-xs font-bold inline-flex items-center justify-center">{i + 1}</span>
+                <span className="font-medium text-slate-800">{entryLabel(e, data.participants)}</span>
+              </li>
+            ))}
           </ol>
         )}
-        <p className="text-[10px] font-bold text-gray-500 mt-2">Lịch thi đấu sẽ có sau khi BTC bốc thăm.</p>
+        <p className="text-xs text-slate-400 mt-3"><i className="fa-regular fa-clock mr-1"></i>Lịch thi đấu sẽ có sau khi BTC bốc thăm.</p>
       </Card>
     );
   }
 
+  const all = [...groupMatches, ...ko];
+  const shown = all.filter(m => filter === "all" || (filter === "live" ? isLive(m) : filter === "done" ? isDone(m) : !isLive(m) && !isDone(m)));
+  const liveCount = all.filter(isLive).length;
+  const doneCount = all.filter(isDone).length;
+  // Gom lịch theo nhóm hiển thị (Bảng A · Vòng 1 / Bán kết…)
+  const sections: { key: string; title: string; items: TMatch[] }[] = [];
+  for (const m of shown) {
+    const title = m.stage === "group" ? (event.format === "rr" ? `Vòng ${m.round}` : `Vòng bảng · Lượt ${m.round}`) : koRoundName(m.round, Math.max(...ko.map(x => x.round)));
+    const key = `${m.stage}-${m.round}`;
+    const s = sections.find(x => x.key === key);
+    if (s) s.items.push(m); else sections.push({ key, title, items: [m] });
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      <Tabs value={tab} onChange={setTab} items={[
-        { id: "schedule", label: "Lịch" },
-        { id: "table", label: event.format === "rr" ? "Bảng xếp hạng" : "Các bảng" },
-        ...(ko.length ? [{ id: "bracket" as const, label: "Nhánh" }] : []),
+      <Tabs variant="line" value={tab} onChange={setTab} items={[
+        { id: "schedule", label: "Lịch thi đấu" },
+        { id: "table", label: event.format === "rr" ? "Xếp hạng" : "Các bảng" },
+        ...(ko.length ? [{ id: "bracket" as const, label: "Nhánh đấu" }] : []),
       ]} />
 
       {tab === "schedule" && (
-        <div className="flex flex-col gap-2">
-          {[...groupMatches, ...ko].map(m => <MatchRow key={m.id} m={m} data={data} ko={ko} highlight={mine(m)} />)}
-        </div>
+        <>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1.5 rounded-full bg-slate-200 overflow-hidden"><div className="h-full bg-blue-600 rounded-full" style={{ width: `${(doneCount / all.length) * 100}%` }} /></div>
+            <span className="text-xs font-semibold text-slate-500 tabular-nums">{doneCount}/{all.length} trận</span>
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
+            {([["all", "Tất cả"], ["live", `Đang đấu${liveCount ? ` (${liveCount})` : ""}`], ["todo", "Sắp tới"], ["done", "Đã xong"]] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setFilter(id)} className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold border transition ${filter === id ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-600 border-slate-200"}`}>{label}</button>
+            ))}
+          </div>
+          {sections.length === 0 && <p className="text-sm text-slate-400 text-center py-6">Không có trận nào.</p>}
+          {sections.map(s => (
+            <div key={s.key} className="flex flex-col gap-2">
+              <div className="text-xs font-bold uppercase tracking-wide text-slate-500 mt-1">{s.title}</div>
+              {s.items.map(m => <MatchRow key={m.id} m={m} data={data} ko={ko} highlight={mine(m)} caption={m.stage === "group" && event.format === "groups_ko" ? `Bảng ${m.group}` : `Trận ${m.order + 1}`} />)}
+            </div>
+          ))}
+        </>
       )}
 
-      {tab === "table" && groups.map(g => {
-        const rows = groupStandings(event, g, data.entries, matches, data.t.settings.walkover_mode);
-        return (
-          <Card key={g} title={event.format === "rr" ? "Bảng xếp hạng" : `Bảng ${g}`}>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-[10px] uppercase text-gray-500 text-left">
-                  <th className="py-1">#</th><th>Đôi</th><th className="text-center">Tr</th><th className="text-center">T</th><th className="text-center">HS set</th><th className="text-center">HS điểm</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(r => {
-                  const e = data.entries.find(x => x.id === r.entry);
-                  const goes = event.format === "groups_ko" && r.rank <= (event.advance || 0);
-                  return (
-                    <tr key={r.entry} className={`border-t border-gray-200 font-bold ${goes ? "bg-green-50" : ""} ${myEntryIds.includes(r.entry) ? "text-blue-700" : ""} ${e?.status === "withdrawn" ? "line-through text-gray-400" : ""}`}>
-                      <td className="py-1">{r.rank}{r.byLot && <span title="Bốc thăm" className="text-orange-500">*</span>}</td>
-                      <td className="truncate max-w-[140px]">{entryLabel(e, data.participants)}</td>
-                      <td className="text-center">{r.played}</td><td className="text-center">{r.won}</td>
-                      <td className="text-center">{r.gameDiff > 0 ? "+" : ""}{r.gameDiff}</td><td className="text-center">{r.pointDiff > 0 ? "+" : ""}{r.pointDiff}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {rows.some(r => r.byLot) && <p className="text-[10px] font-bold text-orange-600 mt-1">* Xếp hạng bằng bốc thăm (bằng hết các chỉ số)</p>}
-          </Card>
-        );
-      })}
+      {tab === "table" && groups.map(g => <Standings key={g} event={event} g={g} data={data} matches={matches} myEntryIds={myEntryIds} />)}
 
-      {tab === "bracket" && Array.from({ length: koRounds }, (_, i) => i + 1).map(r => (
-        <Card key={r} title={koRoundName(r, koRounds)}>
-          <div className="flex flex-col gap-2">
-            {ko.filter(m => m.round === r).map(m => <MatchRow key={m.id} m={m} data={data} ko={ko} highlight={mine(m)} />)}
-          </div>
-          {r === koRounds - 1 && <p className="text-[10px] font-bold text-gray-500 mt-2">Hai đôi thua bán kết đồng hạng ba.</p>}
-        </Card>
-      ))}
+      {tab === "bracket" && <Bracket ko={ko} data={data} mine={mine} />}
     </div>
   );
 }
