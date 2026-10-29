@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { useTournament } from "../../lib/tournament/store";
 import EventView from "./EventView";
+import Register, { registrationOpen } from "./Register";
 import { Btn, Card, Tabs } from "./ui";
 
 const STATUS_LABEL = { draft: "Đang chuẩn bị", registration: "Đang mở đăng ký", closed: "Đã khóa đăng ký", running: "Đang thi đấu", finished: "Đã kết thúc" } as const;
 
 export default function TournamentHome({ code }: { code: string }) {
-  const { data, error, myParticipantIds, isBtc } = useTournament(code);
+  const { data, error, uid, myParticipantIds, isBtc } = useTournament(code);
   const [eventId, setEventId] = useState("");
 
   if (error === "not_found") {
@@ -30,11 +31,12 @@ export default function TournamentHome({ code }: { code: string }) {
         <a href="/giai" className="shrink-0 border-2 border-black px-2 py-1 text-xs font-black"><i className="fa-solid fa-arrow-left"></i></a>
         <div className="min-w-0 flex-1">
           <div className="font-black text-sm truncate"><i className="fa-solid fa-trophy text-yellow-500 mr-1"></i>{t.name}</div>
-          <div className="text-[10px] font-bold text-gray-500">Mã giải {t.code} · {STATUS_LABEL[t.status]}{isBtc ? " · Bạn là BTC" : ""}</div>
+          <div className="text-[10px] font-bold text-gray-500">Mã giải {t.code} · {t.status === "registration" && !registrationOpen(t) ? "Hết hạn đăng ký" : STATUS_LABEL[t.status]}{isBtc ? " · Bạn là BTC" : ""}</div>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto p-3 flex flex-col gap-3">
+        <Register data={data} uid={uid} myParticipantIds={myParticipantIds} />
         {events.length === 0 ? (
           <Card title="Chưa có nội dung"><p className="text-xs font-bold text-gray-500">BTC chưa thêm nội dung thi đấu.</p></Card>
         ) : (
