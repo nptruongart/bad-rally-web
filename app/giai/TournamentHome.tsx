@@ -9,10 +9,11 @@ import Register, { registrationOpen } from "./Register";
 import BtcSetup from "./BtcSetup";
 import BtcEntries from "./BtcEntries";
 import JoinBtc from "./JoinBtc";
+import BtcDraw from "./BtcDraw";
 import { Btn, Card, Tabs } from "./ui";
 
 const STATUS_LABEL = { draft: "Đang chuẩn bị", registration: "Đang mở đăng ký", closed: "Đã khóa đăng ký", running: "Đang thi đấu", finished: "Đã kết thúc" } as const;
-type ManageTab = "setup" | "entries";
+type ManageTab = "setup" | "entries" | "draw";
 
 export default function TournamentHome({ code }: { code: string }) {
   const { data, error, uid, myParticipantIds, isBtc, reload } = useTournament(code);
@@ -52,9 +53,10 @@ export default function TournamentHome({ code }: { code: string }) {
       <div className="max-w-2xl mx-auto p-3 flex flex-col gap-3">
         {managing ? (
           <>
-            <Tabs value={manageTab} onChange={setManageTab} items={[{ id: "setup", label: "Giải" }, { id: "entries", label: "Đôi & người" }]} />
+            <Tabs value={manageTab} onChange={setManageTab} items={[{ id: "setup", label: "Giải" }, { id: "entries", label: "Đôi & người" }, { id: "draw", label: "Bốc thăm" }]} />
             {manageTab === "setup" && <BtcSetup data={data} uid={uid} />}
             {manageTab === "entries" && <BtcEntries data={data} />}
+            {manageTab === "draw" && <BtcDraw data={data} />}
           </>
         ) : (
           <>
