@@ -1,6 +1,6 @@
 "use client";
 // Trang một giải: đầu trang, chọn nội dung, xem; BTC có thêm chế độ Quản lý.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { isHostAccount } from "../../lib/pb";
 import { useTournament } from "../../lib/tournament/store";
@@ -9,6 +9,8 @@ import Register, { registrationOpen } from "./Register";
 import BtcSetup from "./BtcSetup";
 import BtcEntries from "./BtcEntries";
 import JoinBtc from "./JoinBtc";
+import MyCard from "./MyCard";
+import { unlockAudio } from "../../lib/alerts";
 import BtcDraw from "./BtcDraw";
 import BtcDispatch from "./BtcDispatch";
 import { Btn, Card, Tabs } from "./ui";
@@ -21,6 +23,8 @@ export default function TournamentHome({ code }: { code: string }) {
   const [eventId, setEventId] = useState("");
   const [mode, setMode] = useState<"view" | "manage">("view");
   const [manageTab, setManageTab] = useState<ManageTab>("setup");
+  // Trình duyệt chỉ cho phát chuông sau khi người dùng chạm vào trang
+  useEffect(() => { window.addEventListener("pointerdown", unlockAudio); return () => window.removeEventListener("pointerdown", unlockAudio); }, []);
 
   if (error === "not_found") {
     return (
@@ -55,6 +59,7 @@ export default function TournamentHome({ code }: { code: string }) {
         {managing ? (
           <>
             <Tabs value={manageTab} onChange={setManageTab} items={[{ id: "setup", label: "Giải" }, { id: "entries", label: "Đôi & người" }, { id: "draw", label: "Bốc thăm" }, { id: "dispatch", label: "Điều phối" }]} />
+            <MyCard data={data} myEntryIds={myEntryIds} alertOnly />
             {manageTab === "setup" && <BtcSetup data={data} uid={uid} />}
             {manageTab === "entries" && <BtcEntries data={data} />}
             {manageTab === "draw" && <BtcDraw data={data} />}
@@ -63,6 +68,7 @@ export default function TournamentHome({ code }: { code: string }) {
         ) : (
           <>
             {!isBtc && isHostAccount() && <JoinBtc code={t.code} onJoined={reload} />}
+            <MyCard data={data} myEntryIds={myEntryIds} />
             <Register data={data} uid={uid} myParticipantIds={myParticipantIds} />
             {events.length === 0 ? (
               <Card title="Chưa có nội dung"><p className="text-xs font-bold text-gray-500">BTC chưa thêm nội dung thi đấu.</p></Card>
