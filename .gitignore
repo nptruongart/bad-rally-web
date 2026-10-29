@@ -42,3 +42,7 @@ next-env.d.ts
 
 # Mã QR / link chủ sân (bí mật, không đưa lên git)
 /private/
+
+# Môi trường chạy local (PocketBase local, dữ liệu thử) và workspace kế hoạch
+/.local/
+/.superpowers/
