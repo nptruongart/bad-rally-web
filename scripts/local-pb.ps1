@@ -19,4 +19,4 @@ if (-not (Test-Path $exe)) {
 $data = Join-Path $root ".local\pb_data"
 $migrations = Join-Path $root "pocketbase\pb_migrations"
 $hooks = Join-Path $root "pocketbase\pb_hooks"
-& $exe serve --http=127.0.0.1:8090 "--dir=$data" "--migrationsDir=$migrations" "--hooksDir=$hooks"
+& $exe serve --http=127.0.0.1:8090 "--dir=$data" "--migrationsDir=$migrations" "--hooksDir=$hooks" --automigrate=false
