@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import type { ClientResponseError, RecordModel, UnsubscribeFunc } from "pocketbase";
 import { Preferences } from '@capacitor/preferences'; // Bộ nhớ chuẩn Native App
 import { pb, ensureAuth, roomIdFromPin, PUBLIC_APP_URL, isHostAccount, redeemHostCode } from "../lib/pb";
@@ -60,6 +61,7 @@ const dict = {
     tagline: "App xếp trận thông minh",
     desc: "Tạo các tổ hợp đánh đôi công bằng cho Cầu lông, Tennis & Bóng bàn.<br/>Quản lý sân, xoay vòng và kết quả trận đấu dễ dàng.",
     startBtn: "Khởi động ứng dụng",
+    tournamentBtn: "Giải đấu",
     home: "Trang chủ",
     tableView: "DẠNG BẢNG",
     layoutWrap: "Lưới",
@@ -247,6 +249,7 @@ const dict = {
     tagline: "Smart Matchmaking App",
     desc: "Create fair doubles combinations for Badminton, Tennis & Table Tennis.<br/>Manage courts, rotations and match results easily.",
     startBtn: "Launch Application",
+    tournamentBtn: "Tournaments",
     home: "Home",
     tableView: "TABLE VIEW",
     layoutWrap: "Grid",
@@ -500,6 +503,7 @@ const ShuttlecockIcon = ({ className }: { className?: string }) => (
 );
 
 export default function Home() {
+  const router = useRouter();
   const [currentScreen, setCurrentScreen] = useState<"launcher" | "role_select" | "host_setup" | "guest_join" | "app">("launcher");
   const [activeTab, setActiveTab] = useState<"courts" | "ranking" | "players" | "settings">("courts");
 
@@ -631,6 +635,12 @@ export default function Home() {
       setScannerOpen(false);
       let params: URLSearchParams | null = null;
       try { params = new URL(text.trim()).searchParams; } catch { /* không phải link */ }
+      // Mã QR của giải đấu (/giai?code=…) → mở trang giải
+      const tournamentCode = params?.get('code')?.trim();
+      if (tournamentCode && /^\d{6}$/.test(tournamentCode) && /\/giai\/?$/.test(new URL(text.trim()).pathname)) {
+          router.push('/giai?code=' + tournamentCode);
+          return;
+      }
       const hostCode = params?.get('host')?.trim();
       const pin = params?.get('pin')?.trim() || (/^\d{6}$/.test(text.trim()) ? text.trim() : '');
       if (hostCode) {
@@ -645,7 +655,7 @@ export default function Home() {
       } else {
           alert(dict[lang].scanUnknown);
       }
-  }, [lang]);
+  }, [lang, router]);
   const closeScanner = useCallback(() => setScannerOpen(false), []);
 
   const changeCourtLayout = (layout: "wrap" | "row") => {
@@ -1327,6 +1337,12 @@ export default function Home() {
           <button onClick={() => setCurrentScreen(canHost ? "role_select" : "guest_join")} className="bg-yellow-400 border-[3px] border-black text-lg font-black uppercase tracking-widest py-4 px-12 shadow-[6px_6px_0_0_#000] hover:bg-yellow-300 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
               {t.startBtn} ➔
           </button>
+          {/* Lối vào chế độ Giải đấu (trang riêng /giai) */}
+          <div className="mt-5">
+            <a href="/giai" className="inline-block bg-white border-[3px] border-black text-sm font-black uppercase tracking-widest py-2.5 px-6 shadow-[4px_4px_0_0_#000] hover:bg-gray-100 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
+              <i className="fa-solid fa-trophy text-yellow-500 mr-2"></i>{t.tournamentBtn}
+            </a>
+          </div>
         </div>
 
         {/* THẺ BẢN QUYỀN IDEAN Ở TRANG CHỦ */}

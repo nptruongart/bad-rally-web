@@ -41,10 +41,12 @@ export function computeStandings(entries: string[], results: ResultInput[], rule
     return keyed.sort((p, q) => p.k - q.k).map(p => p.e);
   };
 
+  // Hai đôi bằng nhau: đối đầu. Chưa gặp nhau (bảng đang đấu) → hiệu số set, hiệu số điểm, rồi mới bốc thăm.
   const pair = (group: string[]): string[] => {
     const w = headToHead(group[0], group[1]);
-    if (!w) return byLot(group);
-    return w === group[0] ? group : [group[1], group[0]];
+    if (w) return w === group[0] ? group : [group[1], group[0]];
+    return splitBy(group, e => rows.get(e)!.gameDiff, g2 =>
+      splitBy(g2, e => rows.get(e)!.pointDiff, byLot));
   };
 
   // Tách nhóm theo một chỉ số (giảm dần), rồi xử lý từng nhóm con

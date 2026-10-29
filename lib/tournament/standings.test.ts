@@ -56,6 +56,12 @@ test('ba đôi bằng hết: bốc thăm theo rng, đánh dấu byLot', () => {
   assert.deepEqual(rows.map(r => r.byLot), [true, true, true, false]);
 });
 
+test('hai đôi bằng số thắng nhưng chưa gặp nhau (bảng đang đấu): xét hiệu số set rồi điểm, không bốc thăm', () => {
+  const rows = computeStandings(['A', 'B', 'C', 'D'], [res('A', 'C', [[21, 13]]), res('B', 'D', [[21, 14]])], r1, opts(() => { throw new Error('không được bốc thăm'); }));
+  assert.equal(order(rows), 'ABDC');
+  assert.equal(rows.some(r => r.byLot), false);
+});
+
 test('walkover tính 2-0 set, mỗi set đủ điểm thắng', () => {
   const rows = computeStandings(['A', 'B'], [{ a: 'A', b: 'B', scores: [], winner: 'a', walkover: true }], r3, opts());
   const a = rows.find(r => r.entry === 'A')!;

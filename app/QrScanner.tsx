@@ -11,6 +11,9 @@ export default function QrScanner({ onResult, onClose, labels }: {
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState("");
+  // Luôn gọi bản onResult mới nhất mà không phải mở lại camera mỗi lần trang cha vẽ lại
+  const onResultRef = useRef(onResult);
+  useEffect(() => { onResultRef.current = onResult; }, [onResult]);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -38,7 +41,7 @@ export default function QrScanner({ onResult, onClose, labels }: {
           if (code?.data) {
             done = true;
             navigator.vibrate?.(80);
-            onResult(code.data);
+            onResultRef.current(code.data);
           }
         }, 200);
       } catch (e) {
@@ -52,7 +55,7 @@ export default function QrScanner({ onResult, onClose, labels }: {
       if (timer) clearInterval(timer);
       stream?.getTracks().forEach(t => t.stop());
     };
-  }, [onResult, labels.noCamera]);
+  }, [labels.noCamera]);
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/90 flex items-center justify-center p-4">
