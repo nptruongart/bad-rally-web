@@ -48,3 +48,43 @@ onRecordCreate((e) => {
   e.record.set("base_count", base);
   e.next();
 }, "players");
+
+// Chống chen hàng: khách (không phải chủ phòng) không được tự đặt wait_since tùy ý.
+// - Tạo mới: chấp nhận giờ của máy khách nếu lệch giờ server ≤ 2 phút, ngược lại dùng giờ server.
+// - Sửa: chỉ được đặt lại wait_since khi tự chuyển từ "nghỉ" sang "chờ" (cùng quy tắc trên); còn lại giữ nguyên.
+// Lưu ý: mỗi handler chạy trong VM riêng → không dùng được hàm khai báo ngoài handler.
+onRecordCreateRequest((e) => {
+  if (e.hasSuperuserAuth()) return e.next();
+  let isHost = false;
+  try {
+    const room = e.app.findRecordById("rooms", e.record.getString("room"));
+    isHost = !!e.auth && room.getString("host") === e.auth.id;
+  } catch (_) { /* phòng không tồn tại → rule tạo bản ghi sẽ từ chối */ }
+  if (!isHost) {
+    const now = Date.now();
+    const sent = e.record.getInt("wait_since");
+    e.record.set("wait_since", Math.abs(sent - now) <= 120000 ? sent : now);
+  }
+  e.next();
+}, "players");
+
+onRecordUpdateRequest((e) => {
+  if (e.hasSuperuserAuth()) return e.next();
+  let isHost = false;
+  try {
+    const room = e.app.findRecordById("rooms", e.record.getString("room"));
+    isHost = !!e.auth && room.getString("host") === e.auth.id;
+  } catch (_) { /* bỏ qua */ }
+  if (!isHost) {
+    const before = e.record.original();
+    const backToQueue = before.getString("status") === "break" && e.record.getString("status") === "waiting";
+    if (backToQueue) {
+      const now = Date.now();
+      const sent = e.record.getInt("wait_since");
+      e.record.set("wait_since", Math.abs(sent - now) <= 120000 ? sent : now);
+    } else {
+      e.record.set("wait_since", before.getInt("wait_since"));
+    }
+  }
+  e.next();
+}, "players");

@@ -1,6 +1,7 @@
 # Bad Rally - web tĩnh (thư mục out/ của next build) + PocketBase (/api, /_)
-# Đổi dòng dưới thành tên miền thật khi có (vd: badrally.tenmien.vn) — Caddy tự cấp HTTPS.
-146-235-22-130.sslip.io {
+# Tên miền lấy từ biến môi trường BADRALLY_DOMAIN (vd: badrally.tenmien.vn), mặc định là địa chỉ sslip.io hiện tại.
+# Đặt bằng: sudo systemctl edit caddy → [Service] Environment=BADRALLY_DOMAIN=badrally.tenmien.vn — Caddy tự cấp HTTPS.
+{$BADRALLY_DOMAIN:146-235-22-130.sslip.io} {
 	encode zstd gzip
 
 	# PocketBase: API + realtime (SSE) + trang quản trị /_/

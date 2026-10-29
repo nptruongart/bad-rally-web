@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Mã chạy trong PocketBase (JSVM), không phải mã của web
+    "pocketbase/**",
   ]),
 ]);
 

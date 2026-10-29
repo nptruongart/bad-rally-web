@@ -61,7 +61,12 @@ interface HistoryStats {
   lastPartners: Map<string, Set<string>>; // đồng đội ở trận gần nhất của mỗi người
 }
 
+// Lịch sử chỉ đổi khi có trận mới (mảng mới) → tính thống kê 1 lần cho mỗi phiên bản lịch sử
+const statsCache = new WeakMap<MatchRecord[], HistoryStats>();
+
 function buildStats(history: MatchRecord[]): HistoryStats {
+  const cached = statsCache.get(history);
+  if (cached) return cached;
   const partnered = new Map<string, number>();
   const opposed = new Map<string, number>();
   const lastPartners = new Map<string, Set<string>>();
@@ -76,33 +81,68 @@ function buildStats(history: MatchRecord[]): HistoryStats {
     }
     for (const a of t1) for (const b of t2) bump(opposed, pairKey(a, b));
   }
-  return { partnered, opposed, lastPartners };
+  const stats = { partnered, opposed, lastPartners };
+  statsCache.set(history, stats);
+  return stats;
 }
 
-function scoreMatch(team1: MMPlayer[], team2: MMPlayer[], w: Weights, stats: HistoryStats, minPlayCount: number, now: number): number {
-  const all = [...team1, ...team2];
-  const teams = [team1, team2];
+// Bảng tra cứu theo chỉ số cho nhóm ứng viên (≤ 13 người) → chấm điểm hàng nghìn phương án không cần tra Map/chuỗi
+interface ScoreTable {
+  n: number;
+  fair: number[];     // (số trận - ít nhất) * 10
+  wait: number[];     // điểm chờ (tối đa 10)
+  skill: number[];
+  partner: Float64Array; // n*n: số lần từng chung đội
+  opp: Float64Array;     // n*n: số lần từng đối đầu
+  keep: Uint8Array;      // n*n: là đồng đội ở trận gần nhất
+}
 
+function buildTable(players: MMPlayer[], stats: HistoryStats, minPlayCount: number, now: number): ScoreTable {
+  const n = players.length;
+  const partner = new Float64Array(n * n), opp = new Float64Array(n * n), keep = new Uint8Array(n * n);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const k = pairKey(players[i].id, players[j].id);
+      partner[i * n + j] = stats.partnered.get(k) || 0;
+      opp[i * n + j] = stats.opposed.get(k) || 0;
+      keep[i * n + j] = stats.lastPartners.get(players[i].id)?.has(players[j].id) ? 1 : 0;
+    }
+  }
+  return {
+    n, partner, opp, keep,
+    fair: players.map(p => p.playCount - minPlayCount),
+    wait: players.map(p => Math.min((now - (p.waitSince || now)) / 60000, 30) / 3),
+    skill: players.map(p => p.skill),
+  };
+}
+
+// Cùng công thức với bản cũ, nhưng nhận chỉ số người chơi trong bảng tra cứu
+function scoreIdx(t1: number[], t2: number[], w: Weights, T: ScoreTable): number {
+  const n = T.n;
+  let fairSum = 0, wait = 0;
+  for (const i of t1) { fairSum += T.fair[i]; wait += T.wait[i]; }
+  for (const i of t2) { fairSum += T.fair[i]; wait += T.wait[i]; }
   // Công bằng số trận: mỗi trận nhiều hơn người ít trận nhất bị trừ 10 điểm
-  const fairness = -all.reduce((s, p) => s + (p.playCount - minPlayCount), 0) * 10;
-  // Thời gian chờ: tối đa 10 điểm/người (chờ ≥ 30 phút)
-  const wait = all.reduce((s, p) => s + Math.min((now - (p.waitSince || now)) / 60000, 30) / 3, 0);
+  const fairness = -fairSum * 10;
 
   let samePartner = 0, keepPair = 0;
-  for (const team of teams) {
-    for (let i = 0; i < team.length; i++) {
-      for (let j = i + 1; j < team.length; j++) {
-        samePartner += stats.partnered.get(pairKey(team[i].id, team[j].id)) || 0;
-        if (stats.lastPartners.get(team[i].id)?.has(team[j].id)) keepPair++;
+  for (const team of [t1, t2]) {
+    for (let a = 0; a < team.length; a++) {
+      for (let b = a + 1; b < team.length; b++) {
+        samePartner += T.partner[team[a] * n + team[b]];
+        keepPair += T.keep[team[a] * n + team[b]];
       }
     }
   }
   let sameOpponents = 0;
-  for (const a of team1) for (const b of team2) sameOpponents += stats.opposed.get(pairKey(a.id, b.id)) || 0;
+  for (const a of t1) for (const b of t2) sameOpponents += T.opp[a * n + b];
 
   // Cân bằng kỹ năng: so sức mạnh trung bình 2 đội (thang 0..9)
-  const avg = (t: MMPlayer[]) => t.reduce((s, p) => s + p.skill, 0) / t.length;
-  const skillGap = Math.abs(avg(team1) - avg(team2));
+  let s1 = 0, s2 = 0;
+  for (const i of t1) s1 += T.skill[i];
+  for (const i of t2) s2 += T.skill[i];
+  const skillGap = Math.abs(s1 / t1.length - s2 / t2.length);
 
   return (
     (w.playCountFairness / 100) * fairness +
@@ -163,50 +203,74 @@ export function pickMatch(
   const minPlayCount = sorted[0].playCount;
   const rank = new Map(sorted.map((p, i) => [p.id, i]));
 
-  let best: { t1: MMPlayer[]; t2: MMPlayer[]; score: number } | null = null;
-
-  const consider = (t1: MMPlayer[], t2: MMPlayer[]) => {
-    if (!teamFitsCategory(t1, cat) || !teamFitsCategory(t2, cat)) return;
-    // Hệ số rất nhỏ theo thứ tự ưu tiên để phá thế hòa ổn định
-    const score = scoreMatch(t1, t2, weights, stats, minPlayCount, now) - [...t1, ...t2].reduce((s, p) => s + rank.get(p.id)!, 0) * 1e-3;
-    if (!best || score > best.score) best = { t1, t2, score };
+  // Đánh chỉ số cho người trong nhóm ứng viên; mỗi đơn vị (người lẻ / cặp cố định) là danh sách chỉ số
+  const flatPool = pool.flat();
+  const T = buildTable(flatPool, stats, minPlayCount, now);
+  const rankOf = flatPool.map(p => rank.get(p.id)!);
+  const unitIdx: number[][] = [];
+  { let k = 0; for (const u of pool) { unitIdx.push(u.map(() => k++)); } }
+  const toPlayers = (idx: number[]) => idx.map(i => flatPool[i]);
+  // Mọi người trong nhóm đã lọc theo thể loại → chỉ đôi nam nữ cần kiểm tra thêm (đúng 1 nam + 1 nữ mỗi đội)
+  const isMale = flatPool.map(p => genderOf(p) === 'M');
+  const fitsIdx = (idx: number[]) => {
+    if (cat !== 'XD') return true;
+    let m = 0;
+    for (const i of idx) if (isMale[i]) m++;
+    return m === 1 && idx.length === 2;
   };
+
+  let best: { t1: number[]; t2: number[]; score: number } | null = null;
+  const t1: number[] = [], t2: number[] = [];
+
+  const consider = () => {
+    if (!fitsIdx(t1) || !fitsIdx(t2)) return;
+    // Hệ số rất nhỏ theo thứ tự ưu tiên để phá thế hòa ổn định
+    let rankSum = 0;
+    for (const i of t1) rankSum += rankOf[i];
+    for (const i of t2) rankSum += rankOf[i];
+    const score = scoreIdx(t1, t2, weights, T) - rankSum * 1e-3;
+    if (!best || score > best.score) best = { t1: [...t1], t2: [...t2], score };
+  };
+
+  // Số người còn lại từ đơn vị i trở đi (để cắt nhánh sớm)
+  const remainingFrom: number[] = new Array(pool.length + 1).fill(0);
+  for (let i = pool.length - 1; i >= 0; i--) remainingFrom[i] = remainingFrom[i + 1] + pool[i].length;
 
   // Chia từng đơn vị vào đội 1 hoặc đội 2 (cặp cố định không bị tách)
-  const assign = (i: number, t1: MMPlayer[], t2: MMPlayer[]) => {
-    if (t1.length === size1 && t2.length === size2) { consider(t1, t2); return; }
+  const assign = (i: number) => {
+    if (t1.length === size1 && t2.length === size2) { consider(); return; }
     if (i >= pool.length) return;
-    const remaining = pool.slice(i).reduce((s, u) => s + u.length, 0);
-    if (remaining < size1 - t1.length + size2 - t2.length) return;
-    const u = pool[i];
-    if (t1.length + u.length <= size1) assign(i + 1, [...t1, ...u], t2);
-    if (t2.length + u.length <= size2) assign(i + 1, t1, [...t2, ...u]);
-    assign(i + 1, t1, t2); // bỏ qua đơn vị này
+    if (remainingFrom[i] < size1 - t1.length + size2 - t2.length) return;
+    const u = unitIdx[i];
+    if (t1.length + u.length <= size1) { t1.push(...u); assign(i + 1); t1.length -= u.length; }
+    if (t2.length + u.length <= size2) { t2.push(...u); assign(i + 1); t2.length -= u.length; }
+    assign(i + 1); // bỏ qua đơn vị này
   };
-  assign(0, [], []);
+  assign(0);
 
   if (best) {
-    const chosen = best as { t1: MMPlayer[]; t2: MMPlayer[] };
+    const chosen = best as { t1: number[]; t2: number[] };
     // Bước 2: giữ nguyên những người đã chọn, chia lại đội sao cho 2 bên cân sức nhất (ở mọi chế độ).
     // Đổi cách chia không ảnh hưởng ai được ra sân nên không làm lệch xoay vòng.
-    const ids = new Set([...chosen.t1, ...chosen.t2].map(p => p.id));
-    const chosenUnits = pool.filter(u => u.every(p => ids.has(p.id)));
+    const ids = new Set([...chosen.t1, ...chosen.t2]);
+    const chosenUnits = unitIdx.filter(u => u.every(i => ids.has(i)));
     const splitWeights = { ...weights, skillBalance: Math.max(weights.skillBalance, MIN_SPLIT_BALANCE) };
-    let split: { t1: MMPlayer[]; t2: MMPlayer[]; score: number } | null = null;
-    const trySplit = (i: number, t1: MMPlayer[], t2: MMPlayer[]) => {
+    let split: { t1: number[]; t2: number[]; score: number } | null = null;
+    const s1: number[] = [], s2: number[] = [];
+    const trySplit = (i: number) => {
       if (i === chosenUnits.length) {
-        if (t1.length !== size1 || t2.length !== size2 || !teamFitsCategory(t1, cat) || !teamFitsCategory(t2, cat)) return;
-        const score = scoreMatch(t1, t2, splitWeights, stats, minPlayCount, now);
-        if (!split || score > split.score + 1e-9) split = { t1, t2, score };
+        if (s1.length !== size1 || s2.length !== size2 || !fitsIdx(s1) || !fitsIdx(s2)) return;
+        const score = scoreIdx(s1, s2, splitWeights, T);
+        if (!split || score > split.score + 1e-9) split = { t1: [...s1], t2: [...s2], score };
         return;
       }
       const u = chosenUnits[i];
-      if (t1.length + u.length <= size1) trySplit(i + 1, [...t1, ...u], t2);
-      if (t2.length + u.length <= size2) trySplit(i + 1, t1, [...t2, ...u]);
+      if (s1.length + u.length <= size1) { s1.push(...u); trySplit(i + 1); s1.length -= u.length; }
+      if (s2.length + u.length <= size2) { s2.push(...u); trySplit(i + 1); s2.length -= u.length; }
     };
-    trySplit(0, [], []);
-    const final = (split as { t1: MMPlayer[]; t2: MMPlayer[] } | null) || chosen;
-    return [final.t1, final.t2];
+    trySplit(0);
+    const final = (split as { t1: number[]; t2: number[] } | null) || chosen;
+    return [toPlayers(final.t1), toPlayers(final.t2)];
   }
 
   // Đôi nam nữ không ghép được (thiếu nam hoặc nữ) → không xếp

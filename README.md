@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bad Rally – App xếp trận cầu lông
 
-## Getting Started
+Next.js (xuất web tĩnh `out/`) + Capacitor (Android) + PocketBase (backend, realtime).
 
-First, run the development server:
+## Lệnh thường dùng
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev      # chạy thử ở http://localhost:3000
+npm run build    # build web tĩnh vào out/ (tự tạo lại bộ icon trước khi build)
+npm test         # test thuật toán xếp trận (Node ≥ 22.6)
+npm run lint
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Deploy web: `.\deploy\deploy.ps1 -Key C:\duong\dan\ssh-key.key`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Cấu trúc
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Đường dẫn | Nội dung |
+|---|---|
+| `app/page.tsx` | Bộ điều khiển: trạng thái phòng, đồng bộ realtime, xử lý thao tác |
+| `app/components/` | Giao diện: màn hình khởi động, vào phòng, sân, người chơi, cài đặt… |
+| `app/hooks/useStableHandlers.ts` | Giữ hàm xử lý cố định để các thẻ đã memo không vẽ lại vô ích |
+| `app/fa/` | Bộ icon Font Awesome rút gọn — **tự sinh**, đừng sửa tay |
+| `lib/matchmaking.ts` (+ `.test.ts`) | Thuật toán xếp trận |
+| `lib/types.ts`, `lib/i18n.ts` | Kiểu dữ liệu, hằng số, từ điển VI/EN |
+| `lib/pb.ts` | Kết nối PocketBase, tài khoản ẩn danh, mã chủ sân |
+| `pocketbase/` | Migration + hook của server (chép lên `/opt/pocketbase/` trên VPS) |
+| `deploy/` | Caddyfile, script cài VPS, service PocketBase, script deploy |
+| `scripts/build-icons.mjs` | Tạo bộ icon rút gọn từ các class `fa-*` có trong mã |
 
-## Learn More
+## Icon
 
-To learn more about Next.js, take a look at the following resources:
+Dùng icon Font Awesome như bình thường (`<i className="fa-solid fa-ten-icon" />`). Trước mỗi lần `dev`/`build`,
+`scripts/build-icons.mjs` quét mã nguồn và chỉ đóng gói các icon đang dùng. Nếu tên icon được ghép động
+(vd. `` `fa-chevron-${x}` ``), thêm tên đầy đủ vào mảng `EXTRA` trong script.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Đổi tên miền
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Web/app: biến `NEXT_PUBLIC_APP_URL` khi build (hoặc tham số `-AppUrl` của `deploy.ps1`).
+- Caddy: biến môi trường `BADRALLY_DOMAIN` (xem đầu `deploy/Caddyfile`).

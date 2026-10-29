@@ -1,4 +1,5 @@
-@import "@fortawesome/fontawesome-free/css/all.min.css" layer(base);
+/* Icon Font Awesome rút gọn (chỉ icon đang dùng) – tạo tự động bởi scripts/build-icons.mjs */
+@import "./fa/icons.css" layer(base);
 @import "tailwindcss";
 
 /* Bảng màu + chiều cao dòng của Tailwind v3 (bản CDN cũ) → giao diện giữ y nguyên khi lên v4 */
@@ -103,4 +104,31 @@ body {
 .text-shadow-hard {
   text-shadow: 4px 4px 0 #000;
 }
+}
+
+/* Màn hình khởi động: hình trang trí bay lơ lửng + quả cầu rơi (trước đây nhúng trong page.tsx) */
+@keyframes floatSlow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+@keyframes floatFast { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-25px); } }
+.animate-float-slow { animation: floatSlow 6s ease-in-out infinite; }
+.animate-float-fast { animation: floatFast 4s ease-in-out infinite; }
+
+/* Quả cầu rơi từ trên xuống và tưng tưng (góc chúi xuống) */
+@keyframes shuttleDrop {
+  0% { transform: translateY(-120vh) rotate(15deg); opacity: 0; animation-timing-function: ease-in; }
+  5% { opacity: 1; }
+  35% { transform: translateY(0) rotate(-10deg); animation-timing-function: ease-out; }
+  55% { transform: translateY(-20vh) rotate(5deg); animation-timing-function: ease-in; }
+  70% { transform: translateY(0) rotate(-5deg); animation-timing-function: ease-out; }
+  80% { transform: translateY(-5vh) rotate(0deg); animation-timing-function: ease-in; }
+  90% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  95% { transform: translateY(0) rotate(0deg); opacity: 0; }
+  100% { transform: translateY(0) rotate(0deg); opacity: 0; }
+}
+
+/* Hiệu ứng thị sai theo chuột: --mx/--my do JS đặt trực tiếp lên khung (không vẽ lại React) */
+.parallax { transform: translate(calc(var(--mx, 0) * var(--kx, 1) * 1px), calc(var(--my, 0) * var(--ky, 1) * 1px)); }
+
+/* Người dùng bật "giảm chuyển động" → tắt hoạt ảnh trang trí */
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-slow, .animate-float-fast, .shuttle-drop { animation: none !important; }
 }

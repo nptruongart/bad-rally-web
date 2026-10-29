@@ -1,0 +1,19 @@
+/* TỰ ĐỘNG TẠO bởi scripts/build-icons.mjs — đừng sửa tay */
+/*!
+ * Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com
+ * License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License)
+ * Copyright 2024 Fonticons, Inc.
+ */
+.fa{font-family:var(--fa-style-family,"Font Awesome 6 Free");font-weight:var(--fa-style,900)}.fa,.fa-regular,.fa-solid,.far,.fas{-moz-osx-font-smoothing:grayscale;-webkit-font-smoothing:antialiased;display:var(--fa-display,inline-block);font-style:normal;font-variant:normal;line-height:1;text-rendering:auto}.fa-regular:before,.fa-solid:before,.fa:before,.far:before,.fas:before{content:var(--fa)}.fa-classic,.fa-regular,.fa-solid,.far,.fas{font-family:"Font Awesome 6 Free"}.fa-trash-can{--fa:"\f2ed"}.fa-file-alt{--fa:"\f15c"}.fa-right-from-bracket{--fa:"\f2f5"}.fa-users-slash{--fa:"\e073"}.fa-lock{--fa:"\f023"}.fa-share-nodes{--fa:"\f1e0"}.fa-hourglass-half{--fa:"\f252"}.fa-users{--fa:"\f0c0"}.fa-chevron-up{--fa:"\f077"}.fa-user{--fa:"\f007"}.fa-shuffle{--fa:"\f074"}.fa-person-running{--fa:"\f70c"}.fa-user-group{--fa:"\f500"}.fa-headset{--fa:"\f590"}.fa-mug-hot{--fa:"\f7b6"}.fa-rotate-left{--fa:"\f2ea"}.fa-circle-check{--fa:"\f058"}.fa-house-laptop{--fa:"\e066"}.fa-cloud-arrow-up{--fa:"\f0ee"}.fa-left-right{--fa:"\f337"}.fa-shield-halved{--fa:"\f3ed"}.fa-mobile-screen-button{--fa:"\f3cd"}.fa-pen{--fa:"\f304"}.fa-hand-pointer{--fa:"\f25a"}.fa-arrow-left{--fa:"\f060"}.fa-table-cells-large{--fa:"\f009"}.fa-camera{--fa:"\f030"}.fa-gear{--fa:"\f013"}.fa-grip-vertical{--fa:"\f58e"}.fa-caret-down{--fa:"\f0d7"}.fa-ellipsis-vertical{--fa:"\f142"}.fa-arrow-down-short-wide{--fa:"\f884"}.fa-link{--fa:"\f0c1"}.fa-play{--fa:"\f04b"}.fa-chevron-down{--fa:"\f078"}.fa-xmark{--fa:"\f00d"}.fa-chevron-right{--fa:"\f054"}.fa-trophy{--fa:"\f091"}.fa-qrcode{--fa:"\f029"}.fa-border-all{--fa:"\f84c"}.fa-table-list{--fa:"\f00b"}.fa-user-plus{--fa:"\f234"}.fa-check{--fa:"\f00c"}.fa-person-walking-arrow-right{--fa:"\e552"}
+/*!
+ * Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com
+ * License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License)
+ * Copyright 2024 Fonticons, Inc.
+ */
+:host,:root{--fa-style-family-classic:"Font Awesome 6 Free";--fa-font-solid:normal 900 1em/1 "Font Awesome 6 Free"}@font-face{font-family:"Font Awesome 6 Free";font-style:normal;font-weight:900;font-display:block;src:url(./fa-solid-900.woff2) format("woff2")}.fa-solid,.fas{font-weight:900}
+/*!
+ * Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com
+ * License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License)
+ * Copyright 2024 Fonticons, Inc.
+ */
+:host,:root{--fa-style-family-classic:"Font Awesome 6 Free";--fa-font-regular:normal 400 1em/1 "Font Awesome 6 Free"}@font-face{font-family:"Font Awesome 6 Free";font-style:normal;font-weight:400;font-display:block;src:url(./fa-regular-400.woff2) format("woff2")}.fa-regular,.far{font-weight:400}
