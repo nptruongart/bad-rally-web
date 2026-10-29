@@ -33,11 +33,12 @@ export function createWriteQueue(opts: {
   };
 
   let running: Promise<void> | null = null;
+  let disposed = false; // hàng đợi đã được thay bằng hàng đợi khác → dừng hẳn, không gửi/ghi gì nữa
   const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
 
   const run = async () => {
     let attempts = 0;
-    while (ops.length > 0) {
+    while (ops.length > 0 && !disposed) {
       const op = ops[0];
       try {
         await opts.send(op);
@@ -46,10 +47,12 @@ export function createWriteQueue(opts: {
           attempts++;
           if (attempts >= maxAttempts) return;
           await wait(delays[Math.min(attempts - 1, delays.length - 1)]);
+          if (disposed) return;
           continue;
         }
         opts.onError?.(op, e);
       }
+      if (disposed) return;
       attempts = 0;
       ops.shift();
       save();
@@ -63,11 +66,13 @@ export function createWriteQueue(opts: {
 
   return {
     push(op: PendingOp) {
+      if (disposed) return;
       ops.push(op);
       save();
       void flush();
     },
     flush,
     pending: () => ops.length,
+    dispose() { disposed = true; },
   };
 }

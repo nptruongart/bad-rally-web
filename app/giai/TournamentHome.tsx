@@ -13,6 +13,7 @@ import MyCard from "./MyCard";
 import { unlockAudio } from "../../lib/alerts";
 import BtcDraw from "./BtcDraw";
 import BtcDispatch from "./BtcDispatch";
+import { useBtcWriter } from "./useBtcWriter";
 import { Btn, Card, Tabs } from "./ui";
 
 const STATUS_LABEL = { draft: "Đang chuẩn bị", registration: "Đang mở đăng ký", closed: "Đã khóa đăng ký", running: "Đang thi đấu", finished: "Đã kết thúc" } as const;
@@ -20,6 +21,8 @@ type ManageTab = "setup" | "entries" | "draw" | "dispatch";
 
 export default function TournamentHome({ code }: { code: string }) {
   const { data, error, uid, myParticipantIds, isBtc, reload, setData } = useTournament(code);
+  // Một hàng đợi ghi cho cả trang giải (giữ khi BTC chuyển tab) + báo đang chờ đồng bộ ở mọi tab
+  const { write, pending } = useBtcWriter(code, setData, reload);
   const [eventId, setEventId] = useState("");
   const [mode, setMode] = useState<"view" | "manage">("view");
   const [manageTab, setManageTab] = useState<ManageTab>("setup");
@@ -56,6 +59,7 @@ export default function TournamentHome({ code }: { code: string }) {
       </div>
 
       <div className="max-w-2xl mx-auto p-3 flex flex-col gap-3">
+        {isBtc && pending > 0 && <p className="text-xs font-black text-orange-600"><i className="fa-solid fa-cloud-arrow-up mr-1"></i>Đang chờ đồng bộ {pending} thao tác (mất mạng sẽ tự gửi lại)</p>}
         {managing ? (
           <>
             <Tabs value={manageTab} onChange={setManageTab} items={[{ id: "setup", label: "Giải" }, { id: "entries", label: "Đôi & người" }, { id: "draw", label: "Bốc thăm" }, { id: "dispatch", label: "Điều phối" }]} />
@@ -63,7 +67,7 @@ export default function TournamentHome({ code }: { code: string }) {
             {manageTab === "setup" && <BtcSetup data={data} uid={uid} />}
             {manageTab === "entries" && <BtcEntries data={data} />}
             {manageTab === "draw" && <BtcDraw data={data} />}
-            {manageTab === "dispatch" && <BtcDispatch data={data} uid={uid} setData={setData} />}
+            {manageTab === "dispatch" && <BtcDispatch data={data} uid={uid} write={write} />}
           </>
         ) : (
           <>

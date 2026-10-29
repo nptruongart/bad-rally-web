@@ -4,7 +4,8 @@ import { useState } from "react";
 import { pb } from "../../lib/pb";
 import type { TEvent, TournamentData } from "../../lib/tournament/store";
 import { GROUP_KEYS, drawGroups, suggestFormat, type GroupKey } from "../../lib/tournament/draw";
-import { buildEventMatches, fillKoFromGroups, groupResultLocked, suggestSeeds } from "../../lib/tournament/bracket";
+import { buildEventMatches, groupResultLocked, suggestSeeds } from "../../lib/tournament/bracket";
+import { koFillPatches } from "../../lib/tournament/actions";
 import { entryLabel, groupStandings } from "../../lib/tournament/view";
 import { errText } from "./BtcSetup";
 import { Btn, Card, Field, Tabs, inputCls } from "./ui";
@@ -84,7 +85,7 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
     if (lot && !window.confirm("Có thứ hạng phải phân định bằng bốc thăm (bằng hết các chỉ số). Vẫn điền nhánh?")) return;
     try {
       const batch = pb.createBatch();
-      for (const u of fillKoFromGroups(ko, standings)) batch.collection("matches").update(u.id, { entry_a: u.entryA, entry_b: u.entryB });
+      for (const p of koFillPatches(event, data.entries, matches, data.t.settings.walkover_mode)) batch.collection("matches").update(p.id, p.fields);
       batch.collection("events").update(event.id, { stage: "ko" });
       await batch.send();
     } catch (e) { alert(errText(e)); }

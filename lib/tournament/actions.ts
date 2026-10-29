@@ -1,10 +1,12 @@
 // Thao tác của BTC trong ngày thi đấu, tính ra các bản sửa (patch) cần ghi — logic thuần, có test.
 import { matchResult } from './scoring.ts';
-import { groupResultLocked, nextFromWinner } from './bracket.ts';
-import type { GameScore, ScoringRule, Side } from './types.ts';
-import type { TEvent, TMatch } from './store.ts';
+import { fillKoFromGroups, groupResultLocked, nextFromWinner } from './bracket.ts';
+import { GROUP_KEYS } from './draw.ts';
+import { groupStandings } from './view.ts';
+import type { GameScore, ScoringRule, Side, WalkoverMode } from './types.ts';
+import type { Entry, TEvent, TMatch } from './store.ts';
 
-export type Patch = { collection: 'matches' | 'events'; id: string; fields: Record<string, unknown> };
+export type Patch = { collection: 'matches' | 'events' | 'entries'; id: string; fields: Record<string, unknown> };
 
 const done = (m: TMatch) => m.status === 'done' || m.status === 'walkover';
 
@@ -26,8 +28,33 @@ function advance(match: TMatch, winner: Side, eventMatches: TMatch[]): { patches
   return { patches: [{ collection: 'matches', id: next.id, fields: { [next.side === 'a' ? 'entry_a' : 'entry_b']: entry } }] };
 }
 
+// Điền vòng đầu nhánh từ bảng xếp hạng (bỏ qua đôi đã bỏ cuộc khi lấy người đi tiếp)
+export function koFillPatches(event: TEvent, entries: Entry[], eventMatches: TMatch[], walkoverMode: WalkoverMode): Patch[] {
+  if (event.format !== 'groups_ko') return [];
+  const standings: Record<string, string[]> = {};
+  for (const g of GROUP_KEYS.slice(0, event.groups || 2)) {
+    standings[g] = groupStandings(event, g, entries, eventMatches, walkoverMode)
+      .map(r => r.entry).filter(id => entries.find(e => e.id === id)?.status !== 'withdrawn');
+  }
+  return fillKoFromGroups(eventMatches.filter(m => m.stage === 'ko'), standings)
+    .map(u => ({ collection: 'matches' as const, id: u.id, fields: { entry_a: u.entryA, entry_b: u.entryB } }));
+}
+
+// Sau khi vòng bảng thay đổi (sửa tỉ số, bỏ cuộc): nếu nhánh đã điền mà chưa bắt đầu → điền lại các trận bị đổi đội
+export function refillAfter(event: TEvent | undefined, entries: Entry[] | undefined, matchesAfter: TMatch[], walkoverMode: WalkoverMode): Patch[] {
+  if (!event || !entries || event.format !== 'groups_ko') return [];
+  const ko = matchesAfter.filter(m => m.stage === 'ko');
+  if (!ko.some(m => m.round === 1 && (m.entryA || m.entryB)) || groupResultLocked(ko)) return [];
+  if (matchesAfter.some(m => m.stage === 'group' && !done(m))) return [];
+  return koFillPatches(event, entries, matchesAfter, walkoverMode).filter(p => {
+    const cur = ko.find(m => m.id === p.id)!;
+    return cur.entryA !== p.fields.entry_a || cur.entryB !== p.fields.entry_b;
+  });
+}
+
 export function saveScore(input: {
   match: TMatch; scores: GameScore[]; rule: ScoringRule; eventMatches: TMatch[]; uid: string; now: number; force?: boolean;
+  event?: TEvent; entries?: Entry[]; walkoverMode?: WalkoverMode;
 }): { patches: Patch[]; error?: string; needsConfirm?: boolean } {
   const { match, scores, rule, eventMatches, uid, now, force } = input;
   if (match.stage === 'group' && groupResultLocked(eventMatches.filter(m => m.stage === 'ko'))) {
@@ -44,12 +71,10 @@ export function saveScore(input: {
   const adv = advance(match, winner, eventMatches);
   if (adv.error) return { patches: [], error: adv.error };
   const log = match.scores.length ? [...match.log, { at: now, by: uid, from: match.scores, to: scores }] : match.log;
-  return {
-    patches: [
-      { collection: 'matches', id: match.id, fields: { scores, winner, status: 'done', finished_at: now, log, version: match.version + 1 } },
-      ...adv.patches,
-    ],
-  };
+  const main: Patch = { collection: 'matches', id: match.id, fields: { scores, winner, status: 'done', finished_at: now, log, version: match.version + 1 } };
+  const after = eventMatches.map(m => (m.id === match.id ? { ...m, scores, winner, status: 'done' as const } : m));
+  const refill = match.stage === 'group' ? refillAfter(input.event, input.entries, after, input.walkoverMode ?? 'walkover') : [];
+  return { patches: [main, ...adv.patches, ...refill] };
 }
 
 // Đôi bỏ cuộc: các trận chưa đánh của đôi đó → đối thủ thắng xử ép (trận nhánh thì đưa đối thủ lên vòng sau)
@@ -70,9 +95,10 @@ const FIELD: Record<string, keyof TMatch | keyof TEvent> = {
 };
 
 // Bản sửa ngược để Hoàn tác (version vẫn tăng để không đè lên ghi mới hơn)
-export function inversePatches(patches: Patch[], matches: TMatch[], events: TEvent[]): Patch[] {
+export function inversePatches(patches: Patch[], matches: TMatch[], events: TEvent[], entries: Entry[]): Patch[] {
   return patches.map(p => {
-    const cur = (p.collection === 'matches' ? matches.find(m => m.id === p.id) : events.find(e => e.id === p.id)) as Record<string, unknown> | undefined;
+    const list: { id: string }[] = p.collection === 'matches' ? matches : p.collection === 'events' ? events : entries;
+    const cur = list.find(x => x.id === p.id) as Record<string, unknown> | undefined;
     const fields: Record<string, unknown> = {};
     for (const k of Object.keys(p.fields)) {
       if (k === 'version') fields.version = (p.fields.version as number) + 1;

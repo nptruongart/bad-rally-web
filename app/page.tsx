@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { ClientResponseError, RecordModel, UnsubscribeFunc } from "pocketbase";
 import { Preferences } from '@capacitor/preferences'; // Bộ nhớ chuẩn Native App
 import { pb, ensureAuth, roomIdFromPin, PUBLIC_APP_URL, isHostAccount, redeemHostCode } from "../lib/pb";
@@ -1339,9 +1340,9 @@ export default function Home() {
           </button>
           {/* Lối vào chế độ Giải đấu (trang riêng /giai) */}
           <div className="mt-5">
-            <a href="/giai" className="inline-block bg-white border-[3px] border-black text-sm font-black uppercase tracking-widest py-2.5 px-6 shadow-[4px_4px_0_0_#000] hover:bg-gray-100 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
+            <Link href="/giai" className="inline-block bg-white border-[3px] border-black text-sm font-black uppercase tracking-widest py-2.5 px-6 shadow-[4px_4px_0_0_#000] hover:bg-gray-100 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
               <i className="fa-solid fa-trophy text-yellow-500 mr-2"></i>{t.tournamentBtn}
-            </a>
+            </Link>
           </div>
         </div>
 

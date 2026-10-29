@@ -51,6 +51,24 @@ test('lỗi dữ liệu (400) không thử lại mãi: bỏ thao tác, báo lỗ
   assert.deepEqual(sent, ['ok']);
 });
 
+test('hàng đợi cũ đã dispose không gửi lại và không ghi đè bộ nhớ khi hàng đợi mới tiếp quản', async () => {
+  const storage = memStorage();
+  const sent: string[] = [];
+  let online = false;
+  const send = (tag: string) => async (o: PendingOp) => { if (!online) throw netErr(); sent.push(`${tag}:${o.id}`); };
+  const q1 = createWriteQueue({ storageKey: 'k', storage, retryDelays: [5], send: send('q1') });
+  q1.push(op('a'));
+  await new Promise(r => setTimeout(r, 12));
+  q1.dispose();
+  const q2 = createWriteQueue({ storageKey: 'k', storage, retryDelays: [5], send: send('q2') });
+  q2.push(op('b'));
+  online = true;
+  await q2.flush();
+  await new Promise(r => setTimeout(r, 30));
+  assert.deepEqual(sent, ['q2:a', 'q2:b']);
+  assert.equal(JSON.parse(storage.getItem('k')!).length, 0);
+});
+
 test('onState báo số thao tác đang chờ', async () => {
   const states: number[] = [];
   const q = createWriteQueue({ storageKey: 'k', storage: memStorage(), retryDelays: [0], onState: (n) => states.push(n), send: async () => {} });

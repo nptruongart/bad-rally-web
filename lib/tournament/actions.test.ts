@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { callMatch, saveScore, withdrawPatches, inversePatches } from './actions.ts';
-import type { TMatch } from './store.ts';
+import { callMatch, saveScore, withdrawPatches, inversePatches, koFillPatches } from './actions.ts';
+import type { TEvent, TMatch } from './store.ts';
 import type { ScoringRule } from './types.ts';
 
 const r1: ScoringRule = { games: 1, points: 21, cap: 30 };
@@ -67,6 +67,45 @@ test('withdrawPatches: các trận chưa đánh của đôi bỏ cuộc → xử
 
 test('inversePatches trả lại đúng giá trị cũ của các trường đã sửa', () => {
   const m = M('m', { status: 'called', court: 2, version: 4 });
-  const inv = inversePatches([{ collection: 'matches', id: 'm', fields: { status: 'done', winner: 'a', version: 5 } }], [m], []);
+  const inv = inversePatches([{ collection: 'matches', id: 'm', fields: { status: 'done', winner: 'a', version: 5 } }], [m], [], []);
   assert.deepEqual(inv, [{ collection: 'matches', id: 'm', fields: { status: 'called', winner: '', version: 6 } }]);
+});
+
+test('inversePatches hoàn tác cả trạng thái bỏ cuộc của đôi', () => {
+  const entries = [{ id: 'e1', event: 'ev', p1: 'a', p2: 'b', status: 'approved' as const, seed: 0, group: 'A', paid: false, createdBy: '' }];
+  assert.deepEqual(inversePatches([{ collection: 'entries', id: 'e1', fields: { status: 'withdrawn' } }], [], [], entries),
+    [{ collection: 'entries', id: 'e1', fields: { status: 'approved' } }]);
+});
+
+// Bảng A: a1 > a2 > a3 (theo kết quả), bảng B: b1 > b2; nhánh đã điền nhưng chưa đánh
+const E = (id: string, group: string, status: 'approved' | 'withdrawn' = 'approved') => ({ id, event: 'ev', p1: id + 'x', p2: id + 'y', status, seed: 0, group, paid: false, createdBy: '' });
+const ev: TEvent = { id: 'ev', tournament: 't', name: 'Đôi nam', category: 'MD', maxEntries: 12, format: 'groups_ko', groups: 2, advance: 2, scoring: r1, stage: 'ko', order: 0 };
+const groupDone = (id: string, g: string, a: string, b: string, scores: [number, number][]) =>
+  M(id, { group: g, entryA: a, entryB: b, status: 'done', scores, winner: scores[0][0] > scores[0][1] ? 'a' : 'b' });
+const filledKo = () => [
+  M('sf1', { stage: 'ko', group: '', entryA: 'a1', entryB: 'b2', feeds: { a: { group: 'A', place: 1 }, b: { group: 'B', place: 2 } } }),
+  M('sf2', { stage: 'ko', group: '', order: 1, entryA: 'b1', entryB: 'a2', feeds: { a: { group: 'B', place: 1 }, b: { group: 'A', place: 2 } } }),
+  M('f', { stage: 'ko', group: '', round: 2, entryA: '', entryB: '', feeds: { a: { match: 0 }, b: { match: 1 } } }),
+];
+const groupMs = () => [
+  groupDone('g1', 'A', 'a1', 'a2', [[21, 10]]), groupDone('g2', 'A', 'a1', 'a3', [[21, 10]]), groupDone('g3', 'A', 'a2', 'a3', [[21, 10]]),
+  groupDone('g4', 'B', 'b1', 'b2', [[21, 10]]),
+];
+const entries = ['a1', 'a2', 'a3'].map(id => E(id, 'A')).concat(['b1', 'b2'].map(id => E(id, 'B')));
+
+test('sửa tỉ số vòng bảng khi nhánh đã điền nhưng chưa đánh: nhánh tự điền lại theo hạng mới', () => {
+  const ms = [...groupMs(), ...filledKo()];
+  const r = saveScore({ match: ms[0], scores: [[10, 21]], rule: r1, eventMatches: ms, uid: 'u', now: 1, event: ev, entries, walkoverMode: 'walkover' });
+  // a2 thắng a1 → bảng A: a2 (2 thắng), a1 (1), a3 (0)
+  assert.deepEqual(r.patches.slice(1), [
+    { collection: 'matches', id: 'sf1', fields: { entry_a: 'a2', entry_b: 'b2' } },
+    { collection: 'matches', id: 'sf2', fields: { entry_a: 'b1', entry_b: 'a1' } },
+  ]);
+});
+
+test('koFillPatches bỏ qua đôi đã bỏ cuộc khi lấy người đi tiếp', () => {
+  const es = entries.map(e => (e.id === 'a1' ? { ...e, status: 'withdrawn' as const } : e));
+  const ups = koFillPatches(ev, es, [...groupMs(), ...filledKo()], 'walkover');
+  assert.deepEqual(ups.find(p => p.id === 'sf1')?.fields, { entry_a: 'a2', entry_b: 'b2' });
+  assert.deepEqual(ups.find(p => p.id === 'sf2')?.fields, { entry_a: 'b1', entry_b: 'a3' });
 });

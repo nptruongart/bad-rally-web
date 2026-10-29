@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { TournamentData, TMatch } from "../../lib/tournament/store";
 import type { GameScore } from "../../lib/tournament/types";
-import { saveScore, withdrawPatches, type Patch } from "../../lib/tournament/actions";
+import { refillAfter, saveScore, withdrawPatches, type Patch } from "../../lib/tournament/actions";
 import { entryLabel } from "../../lib/tournament/view";
 import { Btn } from "./ui";
 
@@ -27,7 +27,7 @@ export default function ScoreDialog({ match, data, uid, onSave, onWithdraw, onCl
   const eventMatches = data.matches.filter(m => m.event === match.event);
 
   const save = (force = false) => {
-    const r = saveScore({ match, scores, rule, eventMatches, uid, now: nowMs(), force });
+    const r = saveScore({ match, scores, rule, eventMatches, uid, now: nowMs(), force, event, entries: data.entries, walkoverMode: data.t.settings.walkover_mode });
     if (r.error) { alert(r.error); return; }
     if (r.needsConfirm) {
       if (window.confirm(`Tỉ số không đúng luật ${rule.points} điểm (trần ${rule.cap}). Vẫn lưu?`)) save(true);
@@ -37,7 +37,11 @@ export default function ScoreDialog({ match, data, uid, onSave, onWithdraw, onCl
   };
   const withdraw = (entryId: string) => {
     if (!window.confirm(`Ghi "${label(entryId)}" bỏ cuộc? Các trận chưa đánh của đôi này trong ${event.name} sẽ tính thắng xử ép cho đối thủ.`)) return;
-    onWithdraw(entryId, withdrawPatches(entryId, eventMatches, nowMs()));
+    // Đôi rút + các trận còn lại xử thắng cho đối thủ + (nếu nhánh đã điền mà chưa đánh) điền lại nhánh — tất cả hoàn tác được
+    const wp = withdrawPatches(entryId, eventMatches, nowMs());
+    const matchesAfter = eventMatches.map(m => { const p = wp.find(x => x.collection === "matches" && x.id === m.id); return p ? { ...m, status: "walkover" as const, winner: p.fields.winner as "a" | "b" } : m; });
+    const entriesAfter = data.entries.map(e => (e.id === entryId ? { ...e, status: "withdrawn" as const } : e));
+    onWithdraw(entryId, [{ collection: "entries", id: entryId, fields: { status: "withdrawn" } }, ...wp, ...refillAfter(event, entriesAfter, matchesAfter, data.t.settings.walkover_mode)]);
   };
   const set = (i: number, side: 0 | 1, v: string) => setGames(gs => gs.map((g, j) => (j === i ? (side === 0 ? [v.replace(/\D/g, "").slice(0, 2), g[1]] : [g[0], v.replace(/\D/g, "").slice(0, 2)]) : g)));
 

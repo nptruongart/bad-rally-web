@@ -85,12 +85,36 @@ try {
   await claim(nam.id, [guest.id, guest2.id], guest2);
   ok((await claim(nam.id, [guest.id, guest2.id, u3.id], u3)).s === 200, 'người thứ 3 nhận được');
   ok((await claim(nam.id, [guest.id, guest2.id, u3.id, u4.id], u4)).s >= 400, 'tối đa 3 tài khoản');
+  // Người nhận sau không được sửa hồ sơ của người khác; người tạo tên (tài khoản đầu) sửa được khi còn hạn
+  const prof = (body, by) => j('PATCH', `/api/collections/participants/records/${nam.id}`, body, by.token);
+  ok((await prof({ name: 'Bị đổi tên' }, u3)).s >= 400, 'người nhận thêm không đổi được tên');
+  ok((await prof({ skill: 'Khá+' }, guest2)).s >= 400, 'người nhận thêm không đổi được trình độ');
+  ok((await prof({ name: 'Nguyễn Nam' }, guest)).s === 200, 'chủ tên đổi được tên khi còn hạn đăng ký');
+  ok((await prof({ gender: 'F' }, guest)).s >= 400, 'không đổi giới tính khi đã có đôi (tránh lách luật đôi nam/nữ)');
 
   // --- Trận ---
   ok((await j('POST', '/api/collections/matches/records', { event: md.id, stage: 'group', round: 1, order: 0, entry_a: e1.j.id, status: 'pending' }, guest.token)).s >= 400, 'khách không tạo trận');
   const mt = await j('POST', '/api/collections/matches/records', { event: md.id, stage: 'group', round: 1, order: 0, entry_a: e1.j.id, status: 'pending' }, host.token);
   ok(mt.s === 200, 'BTC tạo trận');
   ok((await j('PATCH', `/api/collections/matches/records/${mt.j.id}`, { status: 'done' }, guest.token)).s >= 400, 'khách không sửa trận');
+  // Chống ghi cũ đè ghi mới: version gửi lên phải lớn hơn version đang có
+  const mpath = `/api/collections/matches/records/${mt.j.id}`;
+  ok((await j('PATCH', mpath, { status: 'called', court: 1, version: 1 }, host.token)).s === 200, 'BTC ghi version 1');
+  ok((await j('PATCH', mpath, { status: 'done', version: 2 }, host.token)).s === 200, 'BTC ghi version 2');
+  const stale = await j('PATCH', mpath, { status: 'called', version: 1 }, host2.token);
+  ok(stale.s === 400, 'ghi version cũ (máy BTC khác / gửi lại muộn) bị từ chối: ' + stale.s);
+  ok((await j('GET', mpath, null, host.token)).j?.status === 'done', 'trận đã xong không bị lùi về "đang gọi"');
+  ok((await j('PATCH', mpath, { entry_b: e1.j.id }, host.token)).s === 200, 'ghi không kèm version (điền nhánh) vẫn được');
+
+  // --- Đôi đã duyệt / nội dung đã bốc thăm / mã giải ---
+  await j('PATCH', `/api/collections/entries/records/${e1.j.id}`, { status: 'approved' }, host.token);
+  const hai = (await p('Hải', 'M')).j;
+  ok((await j('PATCH', `/api/collections/entries/records/${e1.j.id}`, { p2: hai.id }, guest.token)).s >= 400, 'khách không đổi người trong đôi đã được duyệt');
+  await j('PATCH', `/api/collections/events/records/${md.id}`, { stage: 'groups' }, host.token);
+  const late = (await p('Kiên', 'M')).j, lateB = (await p('Lộc', 'M')).j;
+  ok((await e(late.id, lateB.id)).s >= 400, 'không đăng ký vào nội dung đã bốc thăm');
+  await j('PATCH', `/api/collections/events/records/${md.id}`, { stage: 'registration' }, host.token);
+  ok((await j('PATCH', `/api/collections/tournaments/records/${tid}`, { code: '999999' }, host.token)).s >= 400, 'BTC không đổi được mã giải (id suy từ mã)');
 
   // --- SĐT ---
   const ct = await j('POST', '/api/collections/contacts/records', { participant: nam.id, phone: '0900000000' }, guest.token);

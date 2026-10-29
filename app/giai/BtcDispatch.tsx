@@ -1,21 +1,17 @@
 "use client";
 // BTC ngày thi đấu: lưới sân, trận gợi ý (sẵn sàng) / bị khóa kèm lý do, gọi trận, nhập tỉ số, hoàn tác, bỏ cuộc.
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
-import { pb } from "../../lib/pb";
+import { useEffect, useState } from "react";
 import type { TournamentData, TMatch } from "../../lib/tournament/store";
 import { planQueue, type BlockReason } from "../../lib/tournament/dispatch";
 import { callMatch, inversePatches, uncallMatch, type Patch } from "../../lib/tournament/actions";
 import { entryLabel } from "../../lib/tournament/view";
-import { useBtcWriter } from "./useBtcWriter";
 import ScoreDialog from "./ScoreDialog";
 import { scoreText } from "./EventView";
-import { errText } from "./BtcSetup";
 import { Btn, Card } from "./ui";
 
 const nowMs = () => Date.now();
 
-export default function BtcDispatch({ data, uid, setData }: { data: TournamentData; uid: string; setData: Dispatch<SetStateAction<TournamentData | null>> }) {
-  const { write, pending } = useBtcWriter(data.t.code, setData);
+export default function BtcDispatch({ data, uid, write }: { data: TournamentData; uid: string; write: (patches: Patch[]) => void }) {
   const [scoring, setScoring] = useState<string>("");
   const [undo, setUndo] = useState<{ label: string; patches: Patch[] } | null>(null);
   const [now, setNow] = useState(nowMs);
@@ -34,7 +30,7 @@ export default function BtcDispatch({ data, uid, setData }: { data: TournamentDa
   const person = (id: string) => data.participants.find(p => p.id === id)?.name || "?";
 
   const apply = (patches: Patch[], undoLabel: string) => {
-    setUndo({ label: undoLabel, patches: inversePatches(patches, data.matches, data.events) });
+    setUndo({ label: undoLabel, patches: inversePatches(patches, data.matches, data.events, data.entries) });
     write(patches);
   };
   const call = (m: TMatch, force = false) => {
@@ -56,7 +52,6 @@ export default function BtcDispatch({ data, uid, setData }: { data: TournamentDa
   return (
     <div className="flex flex-col gap-3 pb-20">
       {data.t.status !== "running" && <p className="text-xs font-black text-orange-600">Giải chưa ở trạng thái “Đang thi đấu” (đổi ở tab Giải).</p>}
-      {pending > 0 && <p className="text-xs font-black text-orange-600"><i className="fa-solid fa-cloud-arrow-up mr-1"></i>Đang chờ đồng bộ {pending} thao tác (mất mạng sẽ tự gửi lại)</p>}
 
       <Card title={`Sân (${freeCourts.length}/${data.t.courts.length} trống)`}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -140,8 +135,7 @@ export default function BtcDispatch({ data, uid, setData }: { data: TournamentDa
       {scoringMatch && (
         <ScoreDialog match={scoringMatch} data={data} uid={uid} onClose={() => setScoring("")}
           onSave={patches => { apply(patches, `Đã lưu ${evName(scoringMatch)}: ${scoreText({ ...scoringMatch, scores: patches[0].fields.scores as TMatch["scores"], status: "done" })}`); setScoring(""); }}
-          onWithdraw={async (entryId, patches) => {
-            try { await pb.collection("entries").update(entryId, { status: "withdrawn" }); } catch (e) { alert(errText(e)); return; }
+          onWithdraw={(entryId, patches) => {
             apply(patches, `Đã ghi bỏ cuộc: ${label(entryId)}`);
             setScoring("");
           }} />

@@ -84,7 +84,9 @@ onRecordCreateRequest((e) => {
   e.next();
 }, "participants");
 
-// Khách sửa người: chỉ thêm/bỏ chính mình khỏi danh sách tài khoản; sửa tên/giới tính/trình độ nếu đã nhận tên đó
+// Khách sửa người: chỉ thêm/bỏ chính mình khỏi danh sách tài khoản (nhận tên, tối đa 3 máy).
+// Sửa tên/giới tính/trình độ: chỉ tài khoản ĐẦU TIÊN của tên đó (người tạo/nhận đầu), khi còn hạn đăng ký;
+// không đổi giới tính khi người đó đã có đôi (tránh lách luật đôi nam/đôi nữ/nam nữ). BTC sửa được mọi lúc.
 onRecordUpdateRequest((e) => {
   if (e.hasSuperuserAuth()) return e.next();
   const u = require(`${__hooks}/tournament_utils.js`);
@@ -96,7 +98,14 @@ onRecordUpdateRequest((e) => {
     const added = after.filter((x) => before.indexOf(x) < 0), removed = before.filter((x) => after.indexOf(x) < 0);
     if (added.some((x) => x !== e.auth.id) || removed.some((x) => x !== e.auth.id)) throw new ForbiddenError("Chỉ được nhận hoặc bỏ nhận tên cho chính mình.");
     const profileChanged = ["name", "gender", "skill"].some((f) => e.record.getString(f) !== old.getString(f));
-    if (profileChanged && before.indexOf(e.auth.id) < 0) throw new ForbiddenError("Chỉ sửa được thông tin của chính mình.");
+    if (profileChanged) {
+      if (before[0] !== e.auth.id) throw new ForbiddenError("Chỉ người tạo tên này mới sửa được thông tin.");
+      if (!u.registrationOpen(t)) throw new BadRequestError("Đã hết hạn đăng ký, nhờ BTC sửa.");
+      if (e.record.getString("gender") !== old.getString("gender")) {
+        const has = e.app.findRecordsByFilter("entries", "status != 'withdrawn' && (p1 = {:p} || p2 = {:p})", "", 1, 0, { p: old.id });
+        if (has.length > 0) throw new BadRequestError("Người này đã có đôi, không đổi giới tính được. Nhờ BTC sửa.");
+      }
+    }
   }
   e.next();
 }, "participants");
@@ -111,6 +120,8 @@ onRecordCreateRequest((e) => {
     if (!e.record.getString("status")) e.record.set("status", "approved");
   } else {
     if (!u.registrationOpen(ctx.tournament)) throw new BadRequestError("Giải chưa mở hoặc đã hết hạn đăng ký.");
+    const stage = ctx.event.getString("stage");
+    if (stage && stage !== "registration") throw new BadRequestError("Nội dung này đã bốc thăm, không nhận đăng ký nữa.");
     const taken = e.app.findRecordsByFilter("entries", "event = {:ev} && (status = 'pending' || status = 'approved')", "", 0, 0, { ev: ctx.event.id }).length;
     e.record.set("status", taken >= ctx.event.getInt("max_entries") ? "waitlist" : "pending");
     e.record.set("seed", 0);
@@ -135,6 +146,8 @@ onRecordUpdateRequest((e) => {
     }
     const st = e.record.getString("status");
     if (st !== old.getString("status") && st !== "withdrawn") throw new ForbiddenError("Chỉ được rút đôi.");
+    const peopleChanged = e.record.getString("p1") !== old.getString("p1") || e.record.getString("p2") !== old.getString("p2");
+    if (peopleChanged && old.getString("status") === "approved") throw new ForbiddenError("Đôi đã được duyệt, nhờ BTC đổi người.");
   }
   e.next();
 }, "entries");
@@ -148,3 +161,22 @@ onRecordCreateRequest((e) => {
   if (!u.isHost(t, e.auth.id) && !u.registrationOpen(t)) throw new BadRequestError("Đã hết hạn đăng ký.");
   e.next();
 }, "contacts");
+
+// Chống ghi cũ đè ghi mới (gửi lại muộn khi mất mạng, hoặc máy BTC khác đang xem dữ liệu cũ):
+// nếu request có version thì phải lớn hơn version đang lưu. Ghi không kèm version (điền nhánh) vẫn được.
+onRecordUpdateRequest((e) => {
+  if (e.hasSuperuserAuth()) return e.next();
+  const body = e.requestInfo().body || {};
+  if (body.version !== undefined && body.version !== null) {
+    const current = e.record.original().getInt("version");
+    if (Number(body.version) <= current) throw new BadRequestError("Trận này vừa được cập nhật ở máy khác. Hãy tải lại.");
+  }
+  e.next();
+}, "matches");
+
+// Mã giải không đổi được (id bản ghi suy ra từ mã → đổi mã là mất đường vào giải)
+onRecordUpdateRequest((e) => {
+  if (e.hasSuperuserAuth()) return e.next();
+  if (e.record.getString("code") !== e.record.original().getString("code")) throw new BadRequestError("Không đổi được mã giải.");
+  e.next();
+}, "tournaments");
