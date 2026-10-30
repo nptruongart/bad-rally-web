@@ -120,6 +120,7 @@ onRecordCreateRequest((e) => {
     if (!e.record.getString("status")) e.record.set("status", "approved");
   } else {
     if (!u.registrationOpen(ctx.tournament)) throw new BadRequestError("Giải chưa mở hoặc đã hết hạn đăng ký.");
+    if (ctx.event.getString("format") === "team_rot") throw new BadRequestError("Nội dung đồng đội do BTC nhập danh sách, không đăng ký đôi.");
     const stage = ctx.event.getString("stage");
     if (stage && stage !== "registration") throw new BadRequestError("Nội dung này đã bốc thăm, không nhận đăng ký nữa.");
     const taken = e.app.findRecordsByFilter("entries", "event = {:ev} && (status = 'pending' || status = 'approved')", "", 0, 0, { ev: ctx.event.id }).length;

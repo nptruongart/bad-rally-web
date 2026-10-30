@@ -5,6 +5,20 @@ import type { TournamentData, TEvent, TMatch } from "../../lib/tournament/store"
 import { entryLabel, groupStandings, koRoundName } from "../../lib/tournament/view";
 import { GROUP_KEYS } from "../../lib/tournament/draw";
 import { Card, Pill, Tabs } from "./ui";
+import { teamRotPersonStandings, teamRotTeamStandings } from "../../lib/tournament/teamrot";
+import { teamColor } from "./BtcTeamRot";
+
+// Nhãn vòng của một trận (vòng bảng / đồng đội xoay cặp); trận nhánh do nơi gọi tự ghi
+export function stageLabel(m: TMatch, data: TournamentData): string {
+  const ev = data.events.find(x => x.id === m.event);
+  if (m.stage === "ko") return "Nhánh";
+  if (ev?.format === "team_rot") return `Lượt ${m.round} · ${teamVs(m, data)}`;
+  return ev?.format === "rr" ? `Vòng ${m.round}` : `Bảng ${m.group} · Vòng ${m.round}`;
+}
+const teamVs = (m: TMatch, data: TournamentData) => {
+  const g = (id: string) => data.entries.find(e => e.id === id)?.group || "?";
+  return `Bảng ${g(m.entryA)} vs ${g(m.entryB)}`;
+};
 
 export const scoreText = (m: TMatch) =>
   m.status === "walkover" ? "W/O" : m.scores.length ? m.scores.map(g => `${g[0]}-${g[1]}`).join(", ") : "";
@@ -33,8 +47,7 @@ export function StatusPill({ m, data }: { m: TMatch; data: TournamentData }) {
 // Thẻ trận dạng bảng điểm: 2 dòng đội, mỗi set một cột, đội thắng in đậm
 export function MatchRow({ m, data, ko, highlight, caption, compact }: { m: TMatch; data: TournamentData; ko: TMatch[]; highlight?: boolean; caption?: ReactNode; compact?: boolean }) {
   const e = (id: string) => data.entries.find(x => x.id === id);
-  const ev = data.events.find(x => x.id === m.event);
-  const cap = caption ?? (m.stage === "group" ? (ev?.format === "rr" ? `Vòng ${m.round}` : `Bảng ${m.group} · Vòng ${m.round}`) : koRoundName(m.round, Math.max(...ko.map(x => x.round))));
+  const cap = caption ?? (m.stage === "group" ? stageLabel(m, data) : koRoundName(m.round, Math.max(...ko.map(x => x.round))));
   const line = (s: "a" | "b") => {
     const id = s === "a" ? m.entryA : m.entryB;
     const won = m.winner === s;
@@ -111,6 +124,86 @@ function Standings({ event, g, data, matches, myEntryIds }: { event: TEvent; g: 
   );
 }
 
+const sign = (n: number) => (n > 0 ? `+${n}` : String(n));
+const TH = "text-[11px] uppercase tracking-wide text-slate-400 bg-slate-50 border-y border-slate-100";
+const rankBadge = (rank: number, top: boolean) => <span className={`inline-flex w-6 h-6 items-center justify-center rounded-md text-xs font-bold ${top ? "bg-amber-400 text-slate-900" : "bg-slate-100 text-slate-500"}`}>{rank}</span>;
+
+// Đồng đội xoay cặp: xếp hạng bảng theo tổng điểm + danh sách thành viên
+function TeamTable({ event, data, matches }: { event: TEvent; data: TournamentData; matches: TMatch[] }) {
+  const keys = GROUP_KEYS.slice(0, event.groups || 0);
+  const entries = data.entries.filter(e => e.event === event.id);
+  const rows = teamRotTeamStandings(keys, entries, matches);
+  const members = (k: string) => entries.filter(e => e.group === k).sort((a, b) => a.seed - b.seed).map(e => data.participants.find(p => p.id === e.p1)?.name || "?");
+  return (
+    <>
+      <Card title="Xếp hạng bảng" right={<span className="text-xs text-slate-400">Theo tổng điểm</span>}>
+        <div className="-mx-4">
+          <table className="w-full text-sm">
+            <thead><tr className={TH}>
+              <th className="py-1.5 pl-4 pr-1 text-left font-semibold w-8">#</th><th className="text-left font-semibold">Bảng</th>
+              <th className="font-semibold w-8">Tr</th><th className="font-semibold w-8">T</th><th className="font-semibold w-14">Điểm</th><th className="font-semibold w-12 pr-4">HS</th>
+            </tr></thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.team} className="border-b border-slate-100 last:border-0 text-slate-800">
+                  <td className="py-2 pl-4 pr-1">{rankBadge(r.rank, r.rank === 1 && r.played > 0)}</td>
+                  <td><span className={`rounded-md px-2 py-0.5 font-bold ${teamColor(r.team)}`}>Bảng {r.team}</span></td>
+                  <td className="text-center tabular-nums text-slate-500">{r.played}</td>
+                  <td className="text-center tabular-nums text-slate-500">{r.won}</td>
+                  <td className="text-center tabular-nums font-bold text-base">{r.pointsFor}</td>
+                  <td className="text-center tabular-nums text-slate-500 pr-4">{sign(r.diff)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11px] text-slate-400 mt-3">Điểm: tổng điểm các cặp của bảng ghi được · bằng điểm xét số trận thắng (T), rồi hiệu số (HS)</p>
+      </Card>
+      <div className="grid grid-cols-2 gap-2">
+        {keys.map(k => (
+          <div key={k} className="rounded-xl bg-white border border-slate-200 overflow-hidden">
+            <div className={`px-3 py-1.5 text-sm font-bold ${teamColor(k)}`}>Bảng {k}</div>
+            <ol className="px-3 py-2 text-sm text-slate-700 space-y-0.5">{members(k).map((n, i) => <li key={i}><span className="text-xs text-slate-400 w-6 inline-block">{k}{i + 1}</span>{n}</li>)}</ol>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function PersonTable({ event, data, matches, myIds }: { event: TEvent; data: TournamentData; matches: TMatch[]; myIds: string[] }) {
+  const [team, setTeam] = useState("");
+  const rows = teamRotPersonStandings(data.entries.filter(e => e.event === event.id), matches).filter(r => !team || r.team === team);
+  const keys = GROUP_KEYS.slice(0, event.groups || 0);
+  return (
+    <Card title="Xếp hạng cá nhân" right={
+      <select value={team} onChange={e => setTeam(e.target.value)} className="rounded-lg border border-slate-200 text-xs px-2 py-1 bg-white">
+        <option value="">Tất cả bảng</option>{keys.map(k => <option key={k} value={k}>Bảng {k}</option>)}
+      </select>}>
+      <div className="-mx-4">
+        <table className="w-full text-sm">
+          <thead><tr className={TH}>
+            <th className="py-1.5 pl-4 pr-1 text-left font-semibold w-8">#</th><th className="text-left font-semibold">Người chơi</th>
+            <th className="font-semibold w-8">Tr</th><th className="font-semibold w-8">T</th><th className="font-semibold w-12">Điểm</th><th className="font-semibold w-12 pr-4">HS</th>
+          </tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.person} className={`border-b border-slate-100 last:border-0 text-slate-800 ${myIds.includes(r.person) ? "bg-blue-50/60" : ""}`}>
+                <td className="py-2 pl-4 pr-1">{rankBadge(r.rank, r.rank <= 3 && r.played > 0)}</td>
+                <td className="truncate max-w-[150px]"><span className={`rounded px-1.5 py-0.5 text-[11px] font-bold mr-1.5 ${teamColor(r.team)}`}>{r.team}</span><span className="font-semibold">{data.participants.find(p => p.id === r.person)?.name || "?"}</span></td>
+                <td className="text-center tabular-nums text-slate-500">{r.played}</td>
+                <td className="text-center tabular-nums text-slate-500">{r.won}</td>
+                <td className="text-center tabular-nums font-bold">{r.pointsFor}</td>
+                <td className="text-center tabular-nums text-slate-500 pr-4">{sign(r.diff)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 // Sơ đồ nhánh: mỗi vòng một cột, trận vòng sau nằm giữa hai trận nuôi nó; kéo ngang trên điện thoại
 function Bracket({ ko, data, mine }: { ko: TMatch[]; data: TournamentData; mine: (m: TMatch) => boolean }) {
   const rounds = Math.max(...ko.map(m => m.round));
@@ -147,8 +240,9 @@ function Bracket({ ko, data, mine }: { ko: TMatch[]; data: TournamentData; mine:
   );
 }
 
-export default function EventView({ event, data, myEntryIds = [] }: { event: TEvent; data: TournamentData; myEntryIds?: string[] }) {
-  const [tab, setTab] = useState<"schedule" | "table" | "bracket">("schedule");
+export default function EventView({ event, data, myEntryIds = [], myParticipantIds = [] }: { event: TEvent; data: TournamentData; myEntryIds?: string[]; myParticipantIds?: string[] }) {
+  const [tab, setTab] = useState<"schedule" | "table" | "bracket" | "people">("schedule");
+  const team = event.format === "team_rot";
   const [filter, setFilter] = useState<"all" | "live" | "todo" | "done">("all");
   const matches = data.matches.filter(m => m.event === event.id);
   const groupMatches = matches.filter(m => m.stage === "group").sort((a, b) => a.round - b.round || a.order - b.order);
@@ -160,7 +254,7 @@ export default function EventView({ event, data, myEntryIds = [] }: { event: TEv
   if (matches.length === 0) {
     return (
       <Card title={`${event.name}`} right={<Pill>{approved.length} đôi</Pill>}>
-        {approved.length === 0 ? <p className="text-sm text-slate-500">Chưa có đôi nào được duyệt.</p> : (
+        {team ? <p className="text-sm text-slate-500">Đồng đội xoay cặp: danh sách các bảng sẽ hiện khi BTC công bố lịch.</p> : approved.length === 0 ? <p className="text-sm text-slate-500">Chưa có đôi nào được duyệt.</p> : (
           <ol className="divide-y divide-slate-100 -mx-4 border-y border-slate-100">
             {approved.map((e, i) => (
               <li key={e.id} className="flex items-center gap-3 px-4 py-2 text-sm">
@@ -182,7 +276,7 @@ export default function EventView({ event, data, myEntryIds = [] }: { event: TEv
   // Gom lịch theo nhóm hiển thị (Bảng A · Vòng 1 / Bán kết…)
   const sections: { key: string; title: string; items: TMatch[] }[] = [];
   for (const m of shown) {
-    const title = m.stage === "group" ? (event.format === "rr" ? `Vòng ${m.round}` : `Vòng bảng · Lượt ${m.round}`) : koRoundName(m.round, Math.max(...ko.map(x => x.round)));
+    const title = team ? `Lượt ${m.round}` : m.stage === "group" ? (event.format === "rr" ? `Vòng ${m.round}` : `Vòng bảng · Lượt ${m.round}`) : koRoundName(m.round, Math.max(...ko.map(x => x.round)));
     const key = `${m.stage}-${m.round}`;
     const s = sections.find(x => x.key === key);
     if (s) s.items.push(m); else sections.push({ key, title, items: [m] });
@@ -192,7 +286,8 @@ export default function EventView({ event, data, myEntryIds = [] }: { event: TEv
     <div className="flex flex-col gap-3">
       <Tabs variant="line" value={tab} onChange={setTab} items={[
         { id: "schedule", label: "Lịch thi đấu" },
-        { id: "table", label: event.format === "rr" ? "Xếp hạng" : "Các bảng" },
+        { id: "table", label: team ? "Xếp hạng bảng" : event.format === "rr" ? "Xếp hạng" : "Các bảng" },
+        ...(team ? [{ id: "people" as const, label: "Cá nhân" }] : []),
         ...(ko.length ? [{ id: "bracket" as const, label: "Nhánh đấu" }] : []),
       ]} />
 
@@ -211,13 +306,15 @@ export default function EventView({ event, data, myEntryIds = [] }: { event: TEv
           {sections.map(s => (
             <div key={s.key} className="flex flex-col gap-2">
               <div className="text-xs font-bold uppercase tracking-wide text-slate-500 mt-1">{s.title}</div>
-              {s.items.map(m => <MatchRow key={m.id} m={m} data={data} ko={ko} highlight={mine(m)} caption={m.stage === "group" && event.format === "groups_ko" ? `Bảng ${m.group}` : `Trận ${m.order + 1}`} />)}
+              {s.items.map(m => <MatchRow key={m.id} m={m} data={data} ko={ko} highlight={mine(m)} caption={team ? teamVs(m, data) : m.stage === "group" && event.format === "groups_ko" ? `Bảng ${m.group}` : `Trận ${m.order + 1}`} />)}
             </div>
           ))}
         </>
       )}
 
-      {tab === "table" && groups.map(g => <Standings key={g} event={event} g={g} data={data} matches={matches} myEntryIds={myEntryIds} />)}
+      {tab === "table" && team && <TeamTable event={event} data={data} matches={matches} />}
+      {tab === "people" && <PersonTable event={event} data={data} matches={matches} myIds={myParticipantIds} />}
+      {tab === "table" && !team && groups.map(g => <Standings key={g} event={event} g={g} data={data} matches={matches} myEntryIds={myEntryIds} />)}
 
       {tab === "bracket" && <Bracket ko={ko} data={data} mine={mine} />}
     </div>

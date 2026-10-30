@@ -34,6 +34,8 @@ function checkEntry(app, entry) {
   if (cat === "MD" && (g[0] !== "M" || g[1] !== "M")) throw new BadRequestError("Đôi nam chỉ gồm 2 nam.");
   if (cat === "WD" && (g[0] !== "F" || g[1] !== "F")) throw new BadRequestError("Đôi nữ chỉ gồm 2 nữ.");
   if (cat === "XD" && !((g[0] === "M" && g[1] === "F") || (g[0] === "F" && g[1] === "M"))) throw new BadRequestError("Nam nữ phải gồm 1 nam và 1 nữ.");
+  // Đồng đội xoay cặp: mỗi người nằm ở 2 cặp trong cùng nội dung (BTC tạo khi công bố lịch)
+  if (event.getString("format") === "team_rot") return { event: event, tournament: app.findRecordById("tournaments", tid) };
   const others = app.findRecordsByFilter("entries",
     "event = {:ev} && status != 'withdrawn' && id != {:self} && (p1 = {:a} || p2 = {:a} || p1 = {:b} || p2 = {:b})",
     "", 1, 0, { ev: event.id, self: entry.id || "", a: p1.id, b: p2.id });

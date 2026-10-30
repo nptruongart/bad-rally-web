@@ -6,7 +6,7 @@ import { planQueue, type BlockReason } from "../../lib/tournament/dispatch";
 import { callMatch, inversePatches, uncallMatch, type Patch } from "../../lib/tournament/actions";
 import { entryLabel } from "../../lib/tournament/view";
 import ScoreDialog from "./ScoreDialog";
-import { MatchRow, scoreText } from "./EventView";
+import { MatchRow, scoreText, stageLabel } from "./EventView";
 import { Btn, Card, Pill } from "./ui";
 
 const nowMs = () => Date.now();
@@ -66,7 +66,7 @@ export default function BtcDispatch({ data, uid, write }: { data: TournamentData
                 </div>
                 {m ? (
                   <>
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mt-1">{evName(m)} · {m.stage === "ko" ? "Nhánh" : `Bảng ${m.group}`}</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mt-1">{evName(m)} · {stageLabel(m, data)}</div>
                     <div className="text-sm font-semibold text-slate-800 mt-0.5 leading-snug">{label(m.entryA)}<div className="text-[11px] text-slate-400 font-normal">vs</div>{label(m.entryB)}</div>
                     <div className="flex flex-col gap-1.5 mt-3">
                       <Btn small tone="blue" onClick={() => setScoring(m.id)}><i className="fa-solid fa-pen"></i>Nhập tỉ số</Btn>
@@ -86,7 +86,7 @@ export default function BtcDispatch({ data, uid, write }: { data: TournamentData
             {ready.map((m, i) => (
               <div key={m.id} className={`rounded-xl border p-3 ${i === 0 ? "border-blue-300 bg-blue-50/60" : "border-slate-200"}`}>
                 <div className="flex justify-between items-center gap-2">
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{evName(m)} · {m.stage === "ko" ? "Nhánh" : `Bảng ${m.group}`} · Vòng {m.round}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{evName(m)} · {stageLabel(m, data)}</span>
                   {i === 0 && <Pill tone="amber"><i className="fa-solid fa-star text-[9px]"></i>Gợi ý</Pill>}
                 </div>
                 <div className="text-sm font-semibold text-slate-800 mt-1">{label(m.entryA)} <span className="text-slate-400 font-normal mx-0.5">vs</span> {label(m.entryB)}</div>
@@ -124,7 +124,7 @@ export default function BtcDispatch({ data, uid, write }: { data: TournamentData
         <div className="flex flex-col gap-2">
           {data.matches.filter(m => m.status === "done" || m.status === "walkover").sort((a, b) => b.finishedAt - a.finishedAt).slice(0, 30).map(m => (
             <button key={m.id} onClick={() => m.status === "done" && setScoring(m.id)} className="text-left hover:opacity-80">
-              <MatchRow m={m} data={data} ko={data.matches.filter(x => x.event === m.event && x.stage === "ko")} caption={`${evName(m)} · ${m.stage === "ko" ? "Nhánh" : `Bảng ${m.group}`}`} compact />
+              <MatchRow m={m} data={data} ko={data.matches.filter(x => x.event === m.event && x.stage === "ko")} caption={`${evName(m)} · ${stageLabel(m, data)}`} compact />
             </button>
           ))}
         </div>

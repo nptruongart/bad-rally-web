@@ -164,7 +164,11 @@ export default function BtcEntries({ data }: { data: TournamentData }) {
   return (
     <div className="flex flex-col gap-3">
       <Tabs value={tab} onChange={v => { setTab(v); setAdding(false); }} items={[...data.events.map(e => ({ id: e.id, label: e.name })), { id: "people", label: "Người chơi" }]} />
-      {event ? (
+      {event?.format === "team_rot" ? (
+        <Card title={event.name}>
+          <p className="text-sm text-slate-600">Nội dung <b>Đồng đội xoay cặp</b>: danh sách các bảng nhập và sửa ở tab <b>Bốc thăm</b> (hủy bốc thăm trước nếu đã công bố). Sửa tên, SĐT từng người ở mục Người chơi.</p>
+        </Card>
+      ) : event ? (
         <Card title={`${event.name}: ${list.filter(e => e.status === "approved").length}/${event.maxEntries} đôi đã duyệt`}
           right={!adding && (!event.stage || event.stage === "registration") ? <Btn small tone="blue" onClick={() => setAdding(true)}><i className="fa-solid fa-user-plus"></i>Thêm đôi</Btn> : undefined}>
           <div className="flex flex-col gap-2">

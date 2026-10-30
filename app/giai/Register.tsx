@@ -66,11 +66,13 @@ export default function Register({ data, uid, myParticipantIds }: { data: Tourna
 
   const me = mine || mePicked;
   const myGender: "M" | "F" = me?.gender === "F" ? "F" : me?.gender === "M" ? "M" : gender;
-  const available = events.filter(e => e.stage === "registration" || !e.stage).filter(e => fitsMe(e.category, myGender));
+  const available = events.filter(e => e.format !== "team_rot" && (e.stage === "registration" || !e.stage)).filter(e => fitsMe(e.category, myGender));
   const ev = available.find(e => e.id === eventId) || available[0];
   const pGender = ev ? partnerGender(ev.category, myGender) : null;
 
-  const myEntries = data.entries.filter(e => e.createdBy === uid || myParticipantIds.includes(e.p1) || myParticipantIds.includes(e.p2));
+  // Cặp của nội dung đồng đội xoay cặp do BTC tạo, không phải đôi tự đăng ký
+  const teamRot = new Set(events.filter(e => e.format === "team_rot").map(e => e.id));
+  const myEntries = data.entries.filter(e => !teamRot.has(e.event) && (e.createdBy === uid || myParticipantIds.includes(e.p1) || myParticipantIds.includes(e.p2)));
 
   const submit = async () => {
     if (!ev || busy) return;

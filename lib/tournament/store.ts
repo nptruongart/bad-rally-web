@@ -18,7 +18,7 @@ export type Tournament = {
 };
 export type TEvent = {
   id: string; tournament: string; name: string; category: 'MD' | 'WD' | 'XD' | 'open';
-  maxEntries: number; format: 'rr' | 'groups_ko' | ''; groups: number; advance: number;
+  maxEntries: number; format: 'rr' | 'groups_ko' | 'team_rot' | ''; groups: number; advance: number;
   scoring: ScoringRule; stage: 'registration' | 'drawn' | 'groups' | 'ko' | 'done' | ''; order: number;
 };
 export type Participant = { id: string; tournament: string; name: string; gender: 'M' | 'F' | ''; skill: string; users: string[] };

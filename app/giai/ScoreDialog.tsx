@@ -76,13 +76,14 @@ export default function ScoreDialog({ match, data, uid, onSave, onWithdraw, onCl
           </div>
           {canAddGame && <Btn small onClick={() => setGames([...games, ["", ""]])}><i className="fa-solid fa-plus"></i>Thêm set</Btn>}
           <Btn tone="blue" className="!py-3" onClick={() => save()}><i className="fa-solid fa-check"></i>Lưu kết quả</Btn>
-          <div className="border-t border-slate-100 pt-3">
+          {/* Đồng đội xoay cặp: vắng người thì BTC ghi tỉ số trận đó (không có bỏ cuộc cả cặp) */}
+          {event.format !== "team_rot" && <div className="border-t border-slate-100 pt-3">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">Bỏ cuộc</div>
             <div className="flex gap-2">
               <Btn small tone="red" className="flex-1 min-w-0" onClick={() => withdraw(match.entryA)}><span className="truncate">{label(match.entryA)}</span></Btn>
               <Btn small tone="red" className="flex-1 min-w-0" onClick={() => withdraw(match.entryB)}><span className="truncate">{label(match.entryB)}</span></Btn>
             </div>
-          </div>
+          </div>}
         </div>
       </div>
     </div>

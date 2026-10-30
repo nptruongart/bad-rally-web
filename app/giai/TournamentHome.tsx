@@ -72,7 +72,7 @@ export default function TournamentHome({ code }: { code: string }) {
           <div className="mt-4 grid grid-cols-3 gap-2">
             {[
               [events.length, "Nội dung"],
-              [data.entries.filter(e => e.status === "approved").length, "Đôi"],
+              [data.participants.length, "Người chơi"],
               [`${data.matches.filter(m => m.status === "done" || m.status === "walkover").length}/${data.matches.length}`, "Trận xong"],
             ].map(([v, l]) => (
               <div key={l as string} className="rounded-xl bg-white/[0.07] px-3 py-2">
@@ -105,7 +105,7 @@ export default function TournamentHome({ code }: { code: string }) {
             ) : (
               <>
                 <Tabs value={current.id} onChange={setEventId} items={events.map(e => ({ id: e.id, label: e.name }))} />
-                <EventView key={current.id} event={current} data={data} myEntryIds={myEntryIds} />
+                <EventView key={current.id} event={current} data={data} myEntryIds={myEntryIds} myParticipantIds={myParticipantIds} />
               </>
             )}
           </>

@@ -9,6 +9,7 @@ import { koFillPatches } from "../../lib/tournament/actions";
 import { entryLabel, groupStandings } from "../../lib/tournament/view";
 import { errText } from "./BtcSetup";
 import { Btn, Card, Field, Tabs, inputCls } from "./ui";
+import BtcTeamRot from "./BtcTeamRot";
 
 type Groups = Partial<Record<GroupKey, string[]>>;
 
@@ -16,7 +17,7 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
   const approved = data.entries.filter(e => e.event === event.id && e.status === "approved");
   const n = approved.length;
   const sug = suggestFormat(n);
-  const [format, setFormat] = useState<"rr" | "groups_ko">(sug.format);
+  const [format, setFormat] = useState<"rr" | "groups_ko" | "team_rot">(event.format === "team_rot" ? "team_rot" : sug.format);
   const [groupCount, setGroupCount] = useState<2 | 4>(sug.groups ?? 2);
   const [advance, setAdvance] = useState<1 | 2>(sug.advance ?? 2);
   const [seeds, setSeeds] = useState<string[]>([]);
@@ -46,7 +47,7 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
     setPreview(next); setSwapFirst("");
   };
   const publish = async () => {
-    if (!preview || busy) return;
+    if (!preview || busy || format === "team_rot") return;
     if (!window.confirm(`Công bố lịch ${event.name}? Mọi người sẽ thấy bảng và lịch thi đấu.`)) return;
     setBusy(true);
     try {
@@ -96,7 +97,7 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
     return (
       <Card title={`${event.name}: đã công bố lịch`}>
         <div className="flex flex-col gap-2 text-xs font-medium">
-          <p>{event.format === "rr" ? "Vòng tròn" : `${event.groups} bảng, mỗi bảng lấy ${event.advance} đôi`} · {matches.filter(m => m.status === "done" || m.status === "walkover").length}/{matches.length} trận xong</p>
+          <p>{event.format === "rr" ? "Vòng tròn" : event.format === "team_rot" ? `Đồng đội xoay cặp · ${event.groups} bảng` : `${event.groups} bảng, mỗi bảng lấy ${event.advance} đôi`} · {matches.filter(m => m.status === "done" || m.status === "walkover").length}/{matches.length} trận xong</p>
           {event.format === "groups_ko" && (
             <Btn tone="green" disabled={!groupDone || groupResultLocked(ko)} onClick={fillBracket}>
               {ko.some(m => m.entryA) ? "Điền lại nhánh từ bảng xếp hạng" : "Điền nhánh từ bảng xếp hạng"}
@@ -110,13 +111,16 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
   }
 
   return (
-    <Card title={`${event.name}: ${n} đôi đã duyệt`}>
+    <Card title={format === "team_rot" ? event.name : `${event.name}: ${n} đôi đã duyệt`}>
       <div className="flex flex-col gap-3">
         {data.t.status === "registration" && <p className="text-xs font-medium text-amber-600">Giải còn đang mở đăng ký. Nên khóa đăng ký trước khi bốc thăm.</p>}
+        <Field label="Thể thức">
+          <select value={format} onChange={e => { setFormat(e.target.value as typeof format); setPreview(null); }} className={inputCls}>
+            <option value="rr">Vòng tròn (đôi cố định)</option><option value="groups_ko">Vòng bảng → loại trực tiếp (đôi cố định)</option><option value="team_rot">Đồng đội xoay cặp (cá nhân theo bảng)</option>
+          </select>
+        </Field>
+        {format === "team_rot" ? <BtcTeamRot data={data} event={event} /> : <>
         <div className="grid grid-cols-3 gap-2">
-          <Field label="Thể thức">
-            <select value={format} onChange={e => { setFormat(e.target.value as typeof format); setPreview(null); }} className={inputCls}><option value="rr">Vòng tròn</option><option value="groups_ko">Bảng → loại</option></select>
-          </Field>
           {format === "groups_ko" && <>
             <Field label="Số bảng"><select value={groupCount} onChange={e => { setGroupCount(Number(e.target.value) as 2 | 4); setPreview(null); setSeeds(s => s.slice(0, Number(e.target.value))); }} className={inputCls}><option value={2}>2</option><option value={4}>4</option></select></Field>
             <Field label="Lấy mỗi bảng"><select value={advance} onChange={e => setAdvance(Number(e.target.value) as 1 | 2)} className={inputCls}><option value={1}>1</option><option value={2}>2</option></select></Field>
@@ -164,6 +168,7 @@ function DrawEvent({ data, event }: { data: TournamentData; event: TEvent }) {
             <Btn tone="green" disabled={busy} onClick={publish}>Công bố lịch</Btn>
           </>
         )}
+        </>}
       </div>
     </Card>
   );

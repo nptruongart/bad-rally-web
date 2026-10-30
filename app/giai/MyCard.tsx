@@ -7,6 +7,7 @@ import { planQueue } from "../../lib/tournament/dispatch";
 import { entryLabel } from "../../lib/tournament/view";
 import { alertCalledToCourt, stopTitleFlash } from "../../lib/alerts";
 import { Btn, Pill } from "./ui";
+import { stageLabel } from "./EventView";
 
 const nowMs = () => Date.now();
 const readAcks = (key: string): string[] => { try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; } };
@@ -64,7 +65,7 @@ export default function MyCard({ data, myEntryIds, alertOnly }: { data: Tourname
                 return (
                   <div key={m.id} className={`px-4 py-3 ${tone === "live" ? "bg-red-50" : ""}`}>
                     <div className="flex justify-between items-center gap-2">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{evName(m.event)} · {m.stage === "ko" ? "Nhánh" : `Vòng ${m.round}`}</span>
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{evName(m.event)} · {stageLabel(m, data)}</span>
                       <Pill tone={tone as "live" | "amber" | "blue" | "gray"}>{text}</Pill>
                     </div>
                     <div className="mt-1 text-sm"><b className="text-slate-900">{label(mine)}</b> <span className="text-slate-400 mx-1">vs</span> <span className="text-slate-700">{opp ? label(opp) : "Chờ xác định"}</span></div>
