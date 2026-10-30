@@ -14,10 +14,11 @@ import { unlockAudio } from "../../lib/alerts";
 import BtcDraw from "./BtcDraw";
 import BtcDispatch from "./BtcDispatch";
 import { useBtcWriter } from "./useBtcWriter";
+import Summary from "./Summary";
 import { Btn, Card, Pill, Tabs } from "./ui";
 
 const STATUS_LABEL = { draft: "Đang chuẩn bị", registration: "Đang mở đăng ký", closed: "Đã khóa đăng ký", running: "Đang thi đấu", finished: "Đã kết thúc" } as const;
-type ManageTab = "setup" | "entries" | "draw" | "dispatch";
+type ManageTab = "setup" | "entries" | "draw" | "dispatch" | "summary";
 
 export default function TournamentHome({ code }: { code: string }) {
   const { data, error, uid, myParticipantIds, isBtc, reload, setData } = useTournament(code);
@@ -88,16 +89,18 @@ export default function TournamentHome({ code }: { code: string }) {
         {isBtc && pending > 0 && <p className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"><i className="fa-solid fa-cloud-arrow-up mr-1"></i>Đang chờ đồng bộ {pending} thao tác (mất mạng sẽ tự gửi lại)</p>}
         {managing ? (
           <>
-            <Tabs variant="line" value={manageTab} onChange={setManageTab} items={[{ id: "setup", label: "Giải" }, { id: "entries", label: "Đôi & người" }, { id: "draw", label: "Bốc thăm" }, { id: "dispatch", label: "Điều phối" }]} />
+            <Tabs variant="line" value={manageTab} onChange={setManageTab} items={[{ id: "setup", label: "Giải" }, { id: "entries", label: "Đôi & người" }, { id: "draw", label: "Bốc thăm" }, { id: "dispatch", label: "Điều phối" }, { id: "summary", label: "Tổng kết" }]} />
             <MyCard data={data} myEntryIds={myEntryIds} alertOnly />
             {manageTab === "setup" && <BtcSetup data={data} uid={uid} />}
             {manageTab === "entries" && <BtcEntries data={data} />}
             {manageTab === "draw" && <BtcDraw data={data} />}
             {manageTab === "dispatch" && <BtcDispatch data={data} uid={uid} write={write} />}
+            {manageTab === "summary" && <Summary data={data} isBtc />}
           </>
         ) : (
           <>
             {!isBtc && isHostAccount() && <JoinBtc code={t.code} onJoined={reload} />}
+            {t.status === "finished" && <Summary data={data} />}
             <MyCard data={data} myEntryIds={myEntryIds} />
             <Register data={data} uid={uid} myParticipantIds={myParticipantIds} />
             {events.length === 0 ? (
