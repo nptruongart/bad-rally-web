@@ -2,13 +2,39 @@
 // Cặp trong đội là 2 người liền nhau theo vòng (1-2, 2-3, …, N-1), mỗi người thuộc đúng 2 cặp → mỗi vòng N lượt ai cũng đánh 2 trận.
 import type { Entry, TMatch } from './store.ts';
 
-// Các cặp (chỉ số thành viên, 0-based) theo thứ tự đánh: bước 2 để người vừa đánh được nghỉ ít nhất 1 lượt
-// 5 người: (1,2) (3,4) (5,1) (2,3) (4,5)
+// Các cặp (chỉ số thành viên, 0-based) theo thứ tự đánh. Lịch lặp lại theo vòng nên thứ tự phải:
+// không ai đánh 2 lượt liền nhau (kể cả lượt cuối nối lượt đầu vòng sau), khoảng nghỉ dài nhất ngắn nhất có thể.
+// Tìm vét (5–7 người: ≤ 720 cách), lấy cách nhỏ nhất theo thứ tự → 5 người: (1,2) (3,4) (5,1) (2,3) (4,5)
+const pairCache = new Map<number, [number, number][]>();
 export function rotationPairs(size: number): [number, number][] {
-  const order: number[] = [];
-  for (let i = 0; i < size; i += 2) order.push(i);
-  for (let i = 1; i < size; i += 2) order.push(i);
-  return order.map(i => [i, (i + 1) % size]);
+  const cached = pairCache.get(size);
+  if (cached) return cached;
+  const pair = (i: number): [number, number] => [i, (i + 1) % size];
+  const clash = (i: number, j: number) => { const [a, b] = pair(i); return pair(j).includes(a) || pair(j).includes(b); };
+  let best: number[] = [], bestGap = Infinity;
+  const maxGap = (order: number[]) => {
+    let worst = 0;
+    for (let p = 0; p < size; p++) {
+      const at = order.flatMap((i, k) => (pair(i).includes(p) ? [k] : []));
+      for (let k = 0; k < at.length; k++) worst = Math.max(worst, ((at[(k + 1) % at.length] - at[k] + size - 1) % size) + 1);
+    }
+    return worst;
+  };
+  const walk = (order: number[], left: number[]) => {
+    if (!left.length) {
+      if (clash(order[order.length - 1], order[0])) return;
+      const g = maxGap(order);
+      if (g < bestGap) { bestGap = g; best = [...order]; }
+      return;
+    }
+    for (const i of left) if (!clash(order[order.length - 1], i)) walk([...order, i], left.filter(x => x !== i));
+  };
+  walk([0], Array.from({ length: size - 1 }, (_, i) => i + 1));
+  // Không có cách nào tránh đánh liền (4 người): giữ thứ tự bước 2
+  if (!best.length) for (let s = 0; s < 2; s++) for (let i = s; i < size; i += 2) best.push(i);
+  const out = best.map(pair);
+  pairCache.set(size, out);
+  return out;
 }
 
 // Mỗi người đánh perPerson trận (số chẵn) → số lượt
@@ -48,9 +74,9 @@ const points = (m: TMatch): [number, number] => m.scores.reduce<[number, number]
 type Stat = { played: number; won: number; pointsFor: number; pointsAgainst: number; diff: number; rank: number };
 const blank = (): Stat => ({ played: 0, won: 0, pointsFor: 0, pointsAgainst: 0, diff: 0, rank: 0 });
 
-// Tổng điểm ghi được trước, rồi số trận thắng, rồi hiệu số; bằng hết thì cùng hạng
+// Thắng 1 trận = 1 điểm: xếp theo số trận thắng, rồi hiệu số, rồi tổng điểm ghi được; bằng hết thì cùng hạng
 function rankRows<T extends Stat>(rows: T[]): T[] {
-  const key = (r: T) => [r.pointsFor, r.won, r.diff];
+  const key = (r: T) => [r.won, r.diff, r.pointsFor];
   rows.sort((x, y) => { const a = key(x), b = key(y); return b[0] - a[0] || b[1] - a[1] || b[2] - a[2]; });
   rows.forEach((r, i) => { const p = rows[i - 1]; r.rank = p && key(p).join() === key(r).join() ? p.rank : i + 1; });
   return rows;

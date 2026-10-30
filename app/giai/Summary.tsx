@@ -31,8 +31,8 @@ export default function Summary({ data, isBtc }: { data: TournamentData; isBtc?:
       if (!p.complete) continue;
       lines.push("", `▸ ${ev.name}`);
       if (p.teams) {
-        p.teams.forEach(r => lines.push(`${medal(r.rank)} Bảng ${r.team}: ${r.pointsFor} điểm (${r.won} thắng)`));
-        if (p.people?.length) lines.push(`Cá nhân: ${p.people.map(r => `${medal(r.rank)} ${person(r.person)} ${r.pointsFor}đ`).join(", ")}`);
+        p.teams.forEach(r => lines.push(`${medal(r.rank)} Bảng ${r.team}: ${r.won} điểm (HS ${r.diff > 0 ? "+" : ""}${r.diff})`));
+        if (p.people?.length) lines.push(`Cá nhân: ${p.people.map(r => `${medal(r.rank)} ${person(r.person)} ${r.won} thắng`).join(", ")}`);
       } else p.places.forEach(pl => lines.push(`${medal(pl.place)} ${pl.entries.map(label).join(" / ")}`));
     }
     lines.push("", `${stats.done} trận · ${span(stats.start, stats.end)}`);
@@ -98,8 +98,8 @@ function EventPodium({ name, p, label, person }: { name: string; p: Podium; labe
               <span className="text-xl w-7 text-center">{medal(r.rank)}</span>
               <span className={`rounded-md px-2 py-0.5 text-sm font-bold ${teamColor(r.team)}`}>Bảng {r.team}</span>
               <span className="flex-1" />
-              <span className="text-xs text-slate-500">{r.won} thắng</span>
-              <span className="font-bold tabular-nums w-14 text-right">{r.pointsFor} đ</span>
+              <span className="text-xs text-slate-500">HS {r.diff > 0 ? "+" : ""}{r.diff}</span>
+              <span className="font-bold tabular-nums w-14 text-right">{r.won} điểm</span>
             </div>
           ))}
         </div>
@@ -110,7 +110,7 @@ function EventPodium({ name, p, label, person }: { name: string; p: Podium; labe
               <div key={r.person} className="rounded-xl border border-slate-200 px-2 py-2 text-center">
                 <div className="text-xl">{medal(r.rank)}</div>
                 <div className="text-sm font-bold truncate">{person(r.person)}</div>
-                <div className="text-xs text-slate-500">Bảng {r.team} · {r.pointsFor} đ</div>
+                <div className="text-xs text-slate-500">Bảng {r.team} · {r.won} thắng · HS {r.diff > 0 ? "+" : ""}{r.diff}</div>
               </div>
             ))}
           </div>

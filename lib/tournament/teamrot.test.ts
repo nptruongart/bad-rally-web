@@ -15,10 +15,24 @@ test('rotationPairs 5 người: (1,2) (3,4) (5,1) (2,3) (4,5)', () => {
   assert.deepEqual(rotationPairs(5), [[0, 1], [2, 3], [4, 0], [1, 2], [3, 4]]);
 });
 
-test('rotationPairs 4 người: mỗi người ở đúng 2 cặp', () => {
-  const ps = rotationPairs(4);
-  assert.equal(ps.length, 4);
-  for (let i = 0; i < 4; i++) assert.equal(ps.filter(p => p.includes(i)).length, 2);
+test('5–7 người: mỗi người ở đúng 2 cặp, không ai đánh 2 lượt liền nhau (kể cả nối sang vòng sau)', () => {
+  for (const size of [5, 6, 7]) {
+    const ps = rotationPairs(size);
+    assert.equal(ps.length, size);
+    for (let i = 0; i < size; i++) assert.equal(ps.filter(p => p.includes(i)).length, 2);
+    for (let r = 0; r < size; r++) {
+      const [a, b] = ps[r], next = ps[(r + 1) % size];
+      assert.ok(!next.includes(a) && !next.includes(b), `${size} người: lượt ${r + 1} và ${r + 2} trùng người`);
+    }
+  }
+});
+
+test('5 người: giữa 2 trận mỗi người nghỉ 1–2 lượt', () => {
+  const s = teamRotSchedule({ teams: 4, size: 5, perPerson: 4 }).filter(x => x.teamA === 0);
+  for (let p = 0; p < 5; p++) {
+    const rounds = s.filter(x => rotationPairs(5)[x.pair].includes(p)).map(x => x.round);
+    for (let i = 1; i < rounds.length; i++) assert.ok([2, 3].includes(rounds[i] - rounds[i - 1]), `A${p + 1}: ${rounds}`);
+  }
 });
 
 test('teamRotRounds: 5 người × 4 trận mỗi người = 10 lượt', () => {
@@ -44,7 +58,7 @@ test('4 đội × 5 người, 4 trận mỗi người: khớp đúng bảng lư�
 });
 
 test('mỗi người đánh đúng số trận đặt ra, không ai đánh 2 trận trong cùng lượt', () => {
-  for (const [teams, size, per] of [[4, 5, 4], [2, 4, 4], [4, 6, 2], [4, 5, 2]] as const) {
+  for (const [teams, size, per] of [[4, 5, 4], [2, 6, 4], [4, 6, 2], [4, 5, 2], [2, 7, 4]] as const) {
     const s = teamRotSchedule({ teams, size, perPerson: per });
     const count = new Map<string, number>();
     for (let r = 1; r <= teamRotRounds(size, per); r++) {
@@ -72,7 +86,7 @@ const M = (id: string, a: string, b: string, scores: [number, number][]): TMatch
 const entries = [E('a12', 'A', 'a1', 'a2'), E('a34', 'A', 'a3', 'a4'), E('b12', 'B', 'b1', 'b2'), E('b34', 'B', 'b3', 'b4')];
 const matches = [M('m1', 'a12', 'b12', [[21, 15]]), M('m2', 'a34', 'b34', [[18, 21]]), { ...M('m3', 'a12', 'b34', [[0, 0]]), status: 'pending' as const, scores: [], winner: '' as const }];
 
-test('xếp hạng đội theo tổng điểm ghi được (trận chưa đánh không tính)', () => {
+test('xếp hạng đội: thắng 1 trận +1 điểm; bằng điểm xét hiệu số (trận chưa đánh không tính)', () => {
   const rows = teamRotTeamStandings(['A', 'B'], entries, matches);
   assert.deepEqual(rows.map(r => [r.team, r.played, r.won, r.pointsFor, r.pointsAgainst, r.rank]), [
     ['A', 2, 1, 39, 36, 1],
@@ -80,7 +94,15 @@ test('xếp hạng đội theo tổng điểm ghi được (trận chưa đánh 
   ]);
 });
 
-test('xếp hạng cá nhân: mỗi người cộng điểm của cặp mình; bằng điểm thì xét thắng rồi hiệu số, cùng hạng nếu bằng hết', () => {
+test('xếp hạng đội: nhiều trận thắng hơn đứng trên dù tổng điểm ghi được thấp hơn', () => {
+  // A thắng 2 trận sát nút (21-19, 21-19 = 42 điểm), B thua nhưng ghi 38 + thắng 1 trận đậm C… → so A với C: C thắng 1 trận 21-0 nhưng thua 2
+  const es = [E('a1', 'A', 'x1', 'x2'), E('a2', 'A', 'x3', 'x4'), E('c1', 'C', 'z1', 'z2'), E('c2', 'C', 'z3', 'z4')];
+  const ms = [M('1', 'a1', 'c1', [[21, 19]]), M('2', 'a2', 'c2', [[21, 19]]), M('3', 'c1', 'a2', [[21, 0]])];
+  const rows = teamRotTeamStandings(['A', 'C'], es, ms);
+  assert.deepEqual(rows.map(r => [r.team, r.won, r.pointsFor]), [['A', 2, 42], ['C', 1, 59]]);
+});
+
+test('xếp hạng cá nhân: theo số trận thắng, rồi hiệu số; cùng hạng nếu bằng hết', () => {
   const rows = teamRotPersonStandings(entries, matches);
   const by = Object.fromEntries(rows.map(r => [r.person, r]));
   assert.deepEqual([by.a1.played, by.a1.won, by.a1.pointsFor, by.a1.diff], [1, 1, 21, 6]);

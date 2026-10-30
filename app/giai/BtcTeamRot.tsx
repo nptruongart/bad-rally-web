@@ -35,7 +35,7 @@ export default function BtcTeamRot({ data, event }: { data: TournamentData; even
   const old = data.entries.filter(e => e.event === event.id && e.status !== "withdrawn");
   const oldTeams = new Set(old.map(e => e.group)).size;
   const [teams, setTeams] = useState<2 | 4>(oldTeams === 2 ? 2 : 4);
-  const [size, setSize] = useState(old.length && oldTeams ? Math.round(old.length / oldTeams) : 5);
+  const [size, setSize] = useState(old.length && oldTeams ? Math.max(5, Math.round(old.length / oldTeams)) : 5);
   const [per, setPer] = useState(4);
   const [roster, setRoster] = useState<Slot[][]>(() => savedRoster(data, event, teams, size));
   const [busy, setBusy] = useState(false);
@@ -99,14 +99,14 @@ export default function BtcTeamRot({ data, event }: { data: TournamentData; even
           <select value={teams} onChange={e => { const t = Number(e.target.value) as 2 | 4; setTeams(t); resize(t, size); }} className={inputCls}><option value={2}>2</option><option value={4}>4</option></select>
         </Field>
         <Field label="Người mỗi bảng">
-          <select value={size} onChange={e => { const s = Number(e.target.value); setSize(s); resize(teams, s); }} className={inputCls}>{[4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}</select>
+          <select value={size} onChange={e => { const s = Number(e.target.value); setSize(s); resize(teams, s); }} className={inputCls}>{[5, 6, 7].map(n => <option key={n} value={n}>{n}</option>)}</select>
         </Field>
         <Field label="Trận mỗi người">
           <select value={per} onChange={e => setPer(Number(e.target.value))} className={inputCls}>{[2, 4, 6].map(n => <option key={n} value={n}>{n}</option>)}</select>
         </Field>
       </div>
       <p className="text-xs text-slate-500 -mt-2">
-        {teams * size} người · {rounds} lượt · {sched.length} trận · mỗi lượt {courtsNeeded} trận (cần {courtsNeeded} sân{data.t.courts.length < courtsNeeded ? `, giải đang có ${data.t.courts.length}` : ""}). Mỗi trận: 1 cặp của bảng này gặp 1 cặp của bảng kia; xếp hạng bảng theo tổng điểm.
+        {teams * size} người · {rounds} lượt · {sched.length} trận · mỗi lượt {courtsNeeded} trận (cần {courtsNeeded} sân{data.t.courts.length < courtsNeeded ? `, giải đang có ${data.t.courts.length}` : ""}). Mỗi trận: 1 cặp của bảng này gặp 1 cặp của bảng kia; không ai đánh 2 lượt liền nhau. Thắng 1 trận +1 điểm cho bảng, xếp hạng theo điểm rồi hiệu số.
       </p>
 
       <div>

@@ -25,6 +25,20 @@ test('chưa nghỉ đủ → khóa "rest" tới finishedAt + restMs; nghỉ đ�
   assert.deepEqual(ids(q2.ready), ['xd']);
 });
 
+test('nội dung miễn nghỉ (đồng đội xoay cặp): vừa đánh trận cùng nội dung vẫn gọi được; vừa đánh nội dung khác thì vẫn phải nghỉ', () => {
+  const doneT = m('t1', { event: 'TEAM', status: 'done', finishedAt: NOW - 1 * MIN });
+  const nextT = m('t2', { event: 'TEAM', entryA: 'E5', entryB: 'E6' });
+  const q1 = planQueue({ matches: [doneT, nextT], people, now: NOW, restMs: 10 * MIN, restExempt: ['TEAM'] });
+  assert.deepEqual(ids(q1.ready), ['t2']);
+  const doneMd = m('md', { status: 'done', finishedAt: NOW - 1 * MIN });
+  const q2 = planQueue({ matches: [doneMd, nextT], people, now: NOW, restMs: 10 * MIN, restExempt: ['TEAM'] });
+  assert.equal(q2.blocked[0].reason.kind, 'rest');
+  // Trận thường sau trận đồng đội vẫn tính nghỉ
+  const md2 = m('md2', { entryA: 'E5', entryB: 'E7' });
+  const q3 = planQueue({ matches: [doneT, md2], people, now: NOW, restMs: 10 * MIN, restExempt: ['TEAM'] });
+  assert.equal(q3.blocked[0].reason.kind, 'rest');
+});
+
 test('thứ tự: vòng bảng trước nhánh, vòng nhỏ trước', () => {
   const q = planQueue({ matches: [
     m('ko', { stage: 'ko', entryA: 'E3', entryB: 'E4' }),

@@ -136,12 +136,12 @@ function TeamTable({ event, data, matches }: { event: TEvent; data: TournamentDa
   const members = (k: string) => entries.filter(e => e.group === k).sort((a, b) => a.seed - b.seed).map(e => data.participants.find(p => p.id === e.p1)?.name || "?");
   return (
     <>
-      <Card title="Xếp hạng bảng" right={<span className="text-xs text-slate-400">Theo tổng điểm</span>}>
+      <Card title="Xếp hạng bảng" right={<span className="text-xs text-slate-400">Thắng 1 trận = 1 điểm</span>}>
         <div className="-mx-4">
           <table className="w-full text-sm">
             <thead><tr className={TH}>
               <th className="py-1.5 pl-4 pr-1 text-left font-semibold w-8">#</th><th className="text-left font-semibold">Bảng</th>
-              <th className="font-semibold w-8">Tr</th><th className="font-semibold w-8">T</th><th className="font-semibold w-14">Điểm</th><th className="font-semibold w-12 pr-4">HS</th>
+              <th className="font-semibold w-8">Tr</th><th className="font-semibold w-12">Điểm</th><th className="font-semibold w-12">HS</th><th className="font-semibold w-12 pr-4">Ghi</th>
             </tr></thead>
             <tbody>
               {rows.map(r => (
@@ -149,15 +149,15 @@ function TeamTable({ event, data, matches }: { event: TEvent; data: TournamentDa
                   <td className="py-2 pl-4 pr-1">{rankBadge(r.rank, r.rank === 1 && r.played > 0)}</td>
                   <td><span className={`rounded-md px-2 py-0.5 font-bold ${teamColor(r.team)}`}>Bảng {r.team}</span></td>
                   <td className="text-center tabular-nums text-slate-500">{r.played}</td>
-                  <td className="text-center tabular-nums text-slate-500">{r.won}</td>
-                  <td className="text-center tabular-nums font-bold text-base">{r.pointsFor}</td>
-                  <td className="text-center tabular-nums text-slate-500 pr-4">{sign(r.diff)}</td>
+                  <td className="text-center tabular-nums font-bold text-base">{r.won}</td>
+                  <td className="text-center tabular-nums text-slate-600">{sign(r.diff)}</td>
+                  <td className="text-center tabular-nums text-slate-400 pr-4">{r.pointsFor}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="text-[11px] text-slate-400 mt-3">Điểm: tổng điểm các cặp của bảng ghi được · bằng điểm xét số trận thắng (T), rồi hiệu số (HS)</p>
+        <p className="text-[11px] text-slate-400 mt-3">Điểm: mỗi trận thắng +1 · bằng điểm xét hiệu số (HS = điểm ghi − điểm bị ghi) · Ghi: tổng điểm ghi được</p>
       </Card>
       <div className="grid grid-cols-2 gap-2">
         {keys.map(k => (
@@ -184,7 +184,7 @@ function PersonTable({ event, data, matches, myIds }: { event: TEvent; data: Tou
         <table className="w-full text-sm">
           <thead><tr className={TH}>
             <th className="py-1.5 pl-4 pr-1 text-left font-semibold w-8">#</th><th className="text-left font-semibold">Người chơi</th>
-            <th className="font-semibold w-8">Tr</th><th className="font-semibold w-8">T</th><th className="font-semibold w-12">Điểm</th><th className="font-semibold w-12 pr-4">HS</th>
+            <th className="font-semibold w-8">Tr</th><th className="font-semibold w-12">Điểm</th><th className="font-semibold w-12">HS</th><th className="font-semibold w-12 pr-4">Ghi</th>
           </tr></thead>
           <tbody>
             {rows.map(r => (
@@ -192,9 +192,9 @@ function PersonTable({ event, data, matches, myIds }: { event: TEvent; data: Tou
                 <td className="py-2 pl-4 pr-1">{rankBadge(r.rank, r.rank <= 3 && r.played > 0)}</td>
                 <td className="truncate max-w-[150px]"><span className={`rounded px-1.5 py-0.5 text-[11px] font-bold mr-1.5 ${teamColor(r.team)}`}>{r.team}</span><span className="font-semibold">{data.participants.find(p => p.id === r.person)?.name || "?"}</span></td>
                 <td className="text-center tabular-nums text-slate-500">{r.played}</td>
-                <td className="text-center tabular-nums text-slate-500">{r.won}</td>
-                <td className="text-center tabular-nums font-bold">{r.pointsFor}</td>
-                <td className="text-center tabular-nums text-slate-500 pr-4">{sign(r.diff)}</td>
+                <td className="text-center tabular-nums font-bold">{r.won}</td>
+                <td className="text-center tabular-nums text-slate-600">{sign(r.diff)}</td>
+                <td className="text-center tabular-nums text-slate-400 pr-4">{r.pointsFor}</td>
               </tr>
             ))}
           </tbody>

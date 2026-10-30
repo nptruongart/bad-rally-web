@@ -18,22 +18,28 @@ export type BlockReason = { kind: 'busy'; person: string; matchId: string } | { 
 const isOpen = (s: MatchStatus) => s === 'pending' || s === 'ready';
 const isOnCourt = (s: MatchStatus) => s === 'called' || s === 'playing';
 
-export function planQueue<M extends DMatch>(input: { matches: M[]; people: Record<string, string[]>; now: number; restMs: number }): {
+// restExempt: nội dung tự lo phần nghỉ trong lịch (đồng đội xoay cặp) → giữa 2 trận cùng nội dung đó không tính giờ nghỉ
+export function planQueue<M extends DMatch>(input: { matches: M[]; people: Record<string, string[]>; now: number; restMs: number; restExempt?: string[] }): {
   ready: M[];
   blocked: { match: M; reason: BlockReason }[];
 } {
   const { matches, people, now, restMs } = input;
+  const exempt = new Set(input.restExempt || []);
   const who = (m: DMatch) => [...(people[m.entryA!] || []), ...(people[m.entryB!] || [])];
 
   const onCourt = new Map<string, string>(); // người → trận đang ở sân
   const lastDone = new Map<string, number>(); // người → lúc xong trận gần nhất
+  const lastDoneOther = new Map<string, number>(); // người → lúc xong trận gần nhất không thuộc nội dung miễn nghỉ
   const remaining = new Map<string, number>(); // nội dung → số trận chưa xong
   for (const m of matches) {
     if (m.status !== 'done' && m.status !== 'walkover') remaining.set(m.event, (remaining.get(m.event) || 0) + 1);
     if (!m.entryA || !m.entryB) continue;
     for (const p of who(m)) {
       if (isOnCourt(m.status)) onCourt.set(p, m.id);
-      if (m.status === 'done' && m.finishedAt) lastDone.set(p, Math.max(lastDone.get(p) || 0, m.finishedAt));
+      if (m.status === 'done' && m.finishedAt) {
+        lastDone.set(p, Math.max(lastDone.get(p) || 0, m.finishedAt));
+        if (!exempt.has(m.event)) lastDoneOther.set(p, Math.max(lastDoneOther.get(p) || 0, m.finishedAt));
+      }
     }
   }
 
@@ -44,8 +50,9 @@ export function planQueue<M extends DMatch>(input: { matches: M[]; people: Recor
     const ps = who(m);
     const busy = ps.find(p => onCourt.has(p));
     if (busy) { blocked.push({ match: m, reason: { kind: 'busy', person: busy, matchId: onCourt.get(busy)! } }); continue; }
-    const resting = ps.find(p => (lastDone.get(p) || 0) + restMs > now && lastDone.has(p));
-    if (resting) { blocked.push({ match: m, reason: { kind: 'rest', person: resting, until: lastDone.get(resting)! + restMs } }); continue; }
+    const last = exempt.has(m.event) ? lastDoneOther : lastDone;
+    const resting = ps.find(p => last.has(p) && last.get(p)! + restMs > now);
+    if (resting) { blocked.push({ match: m, reason: { kind: 'rest', person: resting, until: last.get(resting)! + restMs } }); continue; }
     ready.push(m);
   }
 

@@ -22,7 +22,7 @@ export default function BtcDispatch({ data, uid, write }: { data: TournamentData
   useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 60000); return () => clearTimeout(t); }, [undo]);
 
   const people: Record<string, string[]> = Object.fromEntries(data.entries.map(e => [e.id, [e.p1, e.p2]]));
-  const { ready, blocked } = planQueue({ matches: data.matches, people, now, restMs: data.t.settings.rest_minutes * 60000 });
+  const { ready, blocked } = planQueue({ matches: data.matches, people, now, restMs: data.t.settings.rest_minutes * 60000, restExempt: data.events.filter(e => e.format === "team_rot").map(e => e.id) });
   const onCourt = (courtId: number) => data.matches.find(m => m.court === courtId && (m.status === "called" || m.status === "playing"));
   const freeCourts = data.t.courts.filter(c => !onCourt(c.id));
   const evName = (m: TMatch) => data.events.find(e => e.id === m.event)?.name || "";

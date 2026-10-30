@@ -38,7 +38,7 @@ export default function MyCard({ data, myEntryIds, alertOnly }: { data: Tourname
 
   if (myEntryIds.length === 0) return null;
   const people: Record<string, string[]> = Object.fromEntries(data.entries.map(e => [e.id, [e.p1, e.p2]]));
-  const { ready, blocked } = planQueue({ matches: data.matches, people, now: nowMs(), restMs: data.t.settings.rest_minutes * 60000 });
+  const { ready, blocked } = planQueue({ matches: data.matches, people, now: nowMs(), restMs: data.t.settings.rest_minutes * 60000, restExempt: data.events.filter(e => e.format === "team_rot").map(e => e.id) });
   const next = myNextMatches(myEntryIds, data.matches);
   // Trạng thái trận kế: chữ + tông màu cho chấm/nhãn
   const status = (m: (typeof next)[number]): [string, string] => {
