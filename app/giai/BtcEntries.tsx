@@ -66,7 +66,7 @@ function EntryRow({ e, data, event }: { e: Entry; data: TournamentData; event: T
 
 type Pick = { picked: Participant | null; name: string; gender: "M" | "F" };
 
-function AddEntry({ data, event }: { data: TournamentData; event: TEvent }) {
+function AddEntry({ data, event, onDone }: { data: TournamentData; event: TEvent; onDone: () => void }) {
   const empty: Pick = { picked: null, name: "", gender: event.category === "WD" ? "F" : "M" };
   const [a, setA] = useState<Pick>(empty);
   const [b, setB] = useState<Pick>({ ...empty, gender: event.category === "XD" ? "F" : empty.gender });
@@ -75,16 +75,17 @@ function AddEntry({ data, event }: { data: TournamentData; event: TEvent }) {
     try {
       const p1 = await ensurePerson(data.t.id, a), p2 = await ensurePerson(data.t.id, b);
       await pb.collection("entries").create({ event: event.id, p1, p2, status: "approved" });
-      setA(empty); setB({ ...b, picked: null, name: "" });
+      setA(empty); setB({ ...b, picked: null, name: "" }); onDone();
     } catch (e) { alert("Không thêm được đôi: " + errText(e)); }
   };
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 p-2 flex flex-col gap-2 bg-amber-50/60">
+    <div className="rounded-xl border border-blue-200 p-3 flex flex-col gap-2 bg-blue-50/50">
+      <div className="text-xs text-slate-500">Nhập tên hoặc chọn người đã có trong giải. Đôi thêm tay được duyệt luôn.</div>
       <div className="grid grid-cols-2 gap-2">
         <PersonPicker label="Người 1" people={data.participants} value={a} onChange={setA} />
         <PersonPicker label="Người 2" people={data.participants} value={b} onChange={setB} />
       </div>
-      <Btn tone="black" onClick={add}>+ Thêm đôi (đã duyệt)</Btn>
+      <div className="flex gap-2"><Btn tone="blue" className="flex-1" onClick={add}>Thêm đôi</Btn><Btn onClick={onDone}>Đóng</Btn></div>
     </div>
   );
 }
@@ -157,17 +158,20 @@ function People({ data }: { data: TournamentData }) {
 
 export default function BtcEntries({ data }: { data: TournamentData }) {
   const [tab, setTab] = useState<string>(data.events[0]?.id || "people");
+  const [adding, setAdding] = useState(false);
   const event = data.events.find(e => e.id === tab);
   const list = event ? data.entries.filter(e => e.event === event.id).sort((a, b) => ORDER[a.status] - ORDER[b.status]) : [];
   return (
     <div className="flex flex-col gap-3">
-      <Tabs value={tab} onChange={setTab} items={[...data.events.map(e => ({ id: e.id, label: e.name })), { id: "people", label: "Người chơi" }]} />
+      <Tabs value={tab} onChange={v => { setTab(v); setAdding(false); }} items={[...data.events.map(e => ({ id: e.id, label: e.name })), { id: "people", label: "Người chơi" }]} />
       {event ? (
-        <Card title={`${event.name}: ${list.filter(e => e.status === "approved").length}/${event.maxEntries} đôi đã duyệt`}>
+        <Card title={`${event.name}: ${list.filter(e => e.status === "approved").length}/${event.maxEntries} đôi đã duyệt`}
+          right={!adding && (!event.stage || event.stage === "registration") ? <Btn small tone="blue" onClick={() => setAdding(true)}><i className="fa-solid fa-user-plus"></i>Thêm đôi</Btn> : undefined}>
           <div className="flex flex-col gap-2">
+            {adding && <AddEntry data={data} event={event} onDone={() => setAdding(false)} />}
+            {event.stage && event.stage !== "registration" && <p className="text-xs text-slate-400">Nội dung đã bốc thăm nên không thêm đôi được (hủy bốc thăm trước nếu cần).</p>}
             {list.length === 0 && <p className="text-xs font-medium text-slate-500">Chưa có đôi nào.</p>}
             {list.map(e => <EntryRow key={e.id} e={e} data={data} event={event} />)}
-            <AddEntry data={data} event={event} />
           </div>
         </Card>
       ) : <People data={data} />}
