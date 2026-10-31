@@ -104,3 +104,59 @@ body {
   text-shadow: 4px 4px 0 #000;
 }
 }
+
+/* ===== Chuyển động màn phòng (Bad Rally 2026) ===== */
+@keyframes br-rise { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes br-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes br-pop { 0% { opacity: 0; transform: scale(.96); } 60% { opacity: 1; transform: scale(1.01); } 100% { transform: none; } }
+@keyframes br-sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes br-shuttle {
+  0%   { transform: translate(-46vw, 38vh) rotate(-120deg) scale(.6); opacity: 0; }
+  15%  { opacity: 1; }
+  55%  { transform: translate(-6vw, -18vh) rotate(-20deg) scale(1.05); }
+  75%  { transform: translate(0, -9vh) rotate(0deg) scale(1); }
+  100% { transform: translate(0, -9vh) rotate(0deg) scale(1); }
+}
+@keyframes br-word { 0%, 45% { opacity: 0; transform: translateY(18px); letter-spacing: .3em; } 75%, 100% { opacity: 1; transform: none; letter-spacing: -.025em; } }
+@keyframes br-line { 0%, 60% { width: 0; } 90%, 100% { width: 120px; } }
+@keyframes br-intro-out { 0%, 82% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(1.06); } }
+@keyframes br-glow { 0%, 100% { opacity: .7; } 50% { opacity: 1; } }
+
+.br-rise { animation: br-rise .5s cubic-bezier(.2,.8,.2,1) both; }
+.br-fade { animation: br-fade .35s ease both; }
+.br-pop { animation: br-pop .4s cubic-bezier(.2,.8,.2,1) both; }
+.br-sheet { animation: br-sheet-up .32s cubic-bezier(.2,.8,.2,1) both; }
+.br-intro { animation: br-intro-out 1.9s ease both; }
+.br-intro-shuttle { animation: br-shuttle 1.2s cubic-bezier(.3,.7,.3,1) both; }
+.br-intro-word { animation: br-word 1.5s cubic-bezier(.2,.8,.2,1) both; }
+.br-intro-line { animation: br-line 1.5s cubic-bezier(.2,.8,.2,1) both; }
+.br-intro-sub { animation: br-fade .4s ease 1.1s both; }
+.br-glow { animation: br-glow 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="on"]) :is(.br-rise, .br-fade, .br-pop, .br-sheet, .br-glow) { animation: none; }
+}
+
+/* Trang chủ: quả cầu bay qua lại trên sân (X đi-về, Y vồng lên, lật hướng mỗi lượt) */
+@keyframes br-rally-x { from { transform: translateX(-34vw); } to { transform: translateX(34vw); } }
+@keyframes br-rally-y { 0% { transform: translateY(0); animation-timing-function: cubic-bezier(.2,.7,.4,1); } 50% { transform: translateY(-15vh); animation-timing-function: cubic-bezier(.6,0,.8,.3); } 100% { transform: translateY(0); } }
+@keyframes br-rally-flip { 0%, 49.99% { transform: scaleX(1); } 50%, 100% { transform: scaleX(-1); } }
+@keyframes br-rally-spin { from { transform: rotate(-55deg); } to { transform: rotate(60deg); } }
+@keyframes br-letter { from { opacity: 0; transform: translateY(40px) rotate(6deg); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+.br-rally-x { animation: br-rally-x 1.7s linear infinite alternate; }
+.br-rally-y { animation: br-rally-y 1.7s infinite; }
+.br-rally-flip { animation: br-rally-flip 3.4s infinite; }
+.br-rally-spin { animation: br-rally-spin 1.7s ease-in-out infinite; }
+.br-letter { display: inline-block; animation: br-letter .7s cubic-bezier(.2,.8,.2,1) both; }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="on"]) :is(.br-rally-x, .br-rally-y, .br-rally-flip, .br-rally-spin, .br-letter) { animation: none; }
+}
+
+/* Màn "Tới lượt bạn": vòng sóng lan ra + quả cầu nhún */
+@keyframes br-ring { from { transform: scale(.5); opacity: .9; } to { transform: scale(2.6); opacity: 0; } }
+@keyframes br-bob { 0%, 100% { transform: translateY(0) rotate(-8deg); } 50% { transform: translateY(-10px) rotate(8deg); } }
+.br-ring { animation: br-ring 1.8s cubic-bezier(.2,.6,.3,1) infinite; }
+.br-bob { animation: br-bob 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="on"]) :is(.br-ring, .br-bob) { animation: none; }
+}
