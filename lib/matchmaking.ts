@@ -14,6 +14,9 @@ export interface MatchRecord {
   t1: string[];
   t2: string[];
   at: number;
+  w?: 1 | 2;          // đội thắng (bản ghi cũ không có)
+  n1?: string[];      // tên lúc đánh → lịch sử buổi chơi vẫn đúng tên dù người đó đã rời phòng
+  n2?: string[];
 }
 
 export interface Weights {

@@ -10,6 +10,7 @@ import QrScanner from "./QrScanner";
 import { setUiChoice } from "./uiChoice";
 import { unlockAudio, alertCalledToCourt, stopTitleFlash } from "../lib/alerts";
 import { pickMatch, genderOf, effectiveCategory, fitsCategory, teamFitsCategory, type MatchRecord, type MatchCategory } from "../lib/matchmaking";
+import { buildSession, hasContent } from "../lib/session";
 
 // --- CÁC KIỂU DỮ LIỆU ---
 type SkillLevel = 'Mới chơi' | 'Yếu-' | 'Yếu' | 'Yếu+' | 'Trung bình-' | 'Trung bình' | 'Trung bình+' | 'Khá-' | 'Khá' | 'Khá+';
@@ -227,7 +228,9 @@ const dict = {
     guestWaitingDraft: "Chờ chủ sân xếp trận...",
     guestActiveTag: "ĐANG ĐÁ",
     guestScoringTag: "CHỜ KẾT QUẢ...",
-    hostExitWarning: "⚠️ BẠN LÀ CHỦ SÂN!\n\nNếu bạn thoát, phòng này sẽ bị XÓA và tất cả Khách sẽ bị ngắt kết nối.\nBạn có chắc chắn muốn thoát và đóng phòng?",
+    hostExitWarning: "⚠️ BẠN LÀ CHỦ SÂN!\n\nNếu bạn thoát, phòng này sẽ bị XÓA và tất cả Khách sẽ bị ngắt kết nối.\nKết quả buổi chơi được lưu 30 ngày ở mục \"Lịch sử buổi chơi\".\nBạn có chắc chắn muốn thoát và đóng phòng?",
+    sessionSaveFailed: "Không lưu được kết quả buổi chơi (mất mạng?).\nVẫn thoát và đóng phòng?",
+    sessionHistoryBtn: "Lịch sử buổi chơi",
     roomDeletedTitle: "Phòng Đã Đóng",
     roomDeletedAlert: "Chủ sân đã kết thúc sự kiện và đóng phòng này. Cảm ơn bạn đã tham gia!",
     sidebar: {
@@ -415,7 +418,9 @@ const dict = {
     guestWaitingDraft: "Waiting for host to arrange match...",
     guestActiveTag: "PLAYING",
     guestScoringTag: "WAITING FOR RESULT...",
-    hostExitWarning: "⚠️ YOU ARE THE HOST!\n\nIf you exit, this room will be DELETED and all Guests will be disconnected.\nAre you sure you want to exit and close the room?",
+    hostExitWarning: "⚠️ YOU ARE THE HOST!\n\nIf you exit, this room will be DELETED and all Guests will be disconnected.\nResults are kept for 30 days under \"Session history\".\nAre you sure you want to exit and close the room?",
+    sessionSaveFailed: "Couldn't save this session's results (offline?).\nExit and close the room anyway?",
+    sessionHistoryBtn: "Session history",
     roomDeletedTitle: "Room Closed",
     roomDeletedAlert: "The host has ended the event and closed this room. Thank you for participating!",
     sidebar: {
@@ -562,7 +567,8 @@ export default function ClassicApp() {
   // Bản mới nhất của dữ liệu cho các hàm xử lý (tránh đọc dữ liệu cũ khi thao tác liên tiếp nhanh)
   const playersRef = useRef<Player[]>([]);
   const courtRef = useRef<CourtData[]>([]);
-  const historyRef = useRef<MatchRecord[]>([]); // lịch sử trận (chỉ dùng cho thuật toán, không hiển thị)
+  const historyRef = useRef<MatchRecord[]>([]); // lịch sử trận: thuật toán ghép cặp + lưu buổi chơi khi chủ sân thoát
+  const roomCreatedRef = useRef(0); // lúc tạo phòng = giờ bắt đầu buổi chơi
   const applyPlayers = (next: Player[]) => { playersRef.current = next; setPlayers(next); };
   const applyCourts = (next: CourtData[]) => { courtRef.current = next; setCourtData(next); };
   const writeQueue = useRef<Promise<void>>(Promise.resolve());
@@ -680,6 +686,7 @@ export default function ClassicApp() {
         applyCourts((room.courts as CourtData[]) || []);
         setRoomName(room.name || '');
         historyRef.current = (room.history as MatchRecord[]) || [];
+        roomCreatedRef.current = Date.parse(String(room.created || '').replace(' ', 'T')) || 0;
         if (userRole === 'guest' || !hostSettingsLoaded.current) {
             setSettings({ ...DEFAULT_SETTINGS, ...(room.settings || {}) });
             hostSettingsLoaded.current = true;
@@ -876,6 +883,15 @@ export default function ClassicApp() {
       if (userRole === 'host') {
           if (!window.confirm(t.hostExitWarning)) return;
           if (roomId) {
+              const session = buildSession({ roomName, pin: roomPin, roomCreated: roomCreatedRef.current, now: nowMs(), players: playersRef.current, history: historyRef.current });
+              if (hasContent(session)) {
+                  try {
+                      await pb.collection('sessions').create({ host: pb.authStore.record?.id, room_name: session.roomName, pin: session.pin, started_at: session.startedAt, ended_at: session.endedAt, data: { players: session.players, matches: session.matches } });
+                  } catch (e) {
+                      console.error("Lỗi lưu buổi chơi:", e);
+                      if (!window.confirm(t.sessionSaveFailed)) return;
+                  }
+              }
               try { await pb.collection('rooms').delete(roomId); }
               catch (e) { console.error("Lỗi xóa phòng:", e); }
           }
@@ -1178,8 +1194,10 @@ export default function ClassicApp() {
         updates[id] = { status: 'waiting', waitSince: now, playCount: p.playCount + 1, wins: p.wins + (isWinner ? 1 : 0) };
     }
     // Trận có diễn ra (không phải hủy) → lưu lịch sử ghép cặp, giữ 300 trận gần nhất
-    const newHistory = winningTeam === 0 ? undefined
-        : [...historyRef.current, { t1: team1Ids, t2: court.playerIds.slice(topCount), at: now }].slice(-300);
+    const team2Ids = court.playerIds.slice(topCount);
+    const namesOf = (ids: string[]) => ids.map(id => playersRef.current.find(x => x.id === id)?.name ?? '?');
+    const record: MatchRecord = { t1: team1Ids, t2: team2Ids, at: now, n1: namesOf(team1Ids), n2: namesOf(team2Ids), ...(winningTeam > 0 ? { w: winningTeam as 1 | 2 } : {}) };
+    const newHistory = winningTeam === 0 ? undefined : [...historyRef.current, record].slice(-300);
     // Ghi nhớ trạng thái trước đó để hoàn tác nếu bấm nhầm
     const before: Record<string, Partial<Player>> = {};
     for (const id of Object.keys(updates)) {
@@ -1349,6 +1367,11 @@ export default function ClassicApp() {
             <Link href="/giai" className="inline-block bg-white border-[3px] border-black text-sm font-black uppercase tracking-widest py-2.5 px-6 shadow-[4px_4px_0_0_#000] hover:bg-gray-100 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
               <i className="fa-solid fa-trophy text-yellow-500 mr-2"></i>{t.tournamentBtn}
             </Link>
+            {canHost && (
+              <Link href="/lich-su" className="inline-block mt-3 sm:mt-0 sm:ml-3 bg-white border-[3px] border-black text-sm font-black uppercase tracking-widest py-2.5 px-6 shadow-[4px_4px_0_0_#000] hover:bg-gray-100 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
+                <i className="fa-solid fa-clock-rotate-left text-blue-500 mr-2"></i>{t.sessionHistoryBtn}
+              </Link>
+            )}
           </div>
         </div>
 
