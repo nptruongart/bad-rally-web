@@ -10,7 +10,9 @@ import QrScanner from "./QrScanner";
 import { setUiChoice } from "./uiChoice";
 import { unlockAudio, alertCalledToCourt, stopTitleFlash } from "../lib/alerts";
 import { pickMatch, genderOf, effectiveCategory, fitsCategory, teamFitsCategory, type MatchRecord, type MatchCategory } from "../lib/matchmaking";
-import { buildSession, hasContent } from "../lib/session";
+import { buildSession, hasContent, sessionMatches } from "../lib/session";
+import { partnerCount, partnerWarnings, draftTeams } from "../lib/partners";
+import RecentMatches from "./RecentMatches";
 
 // --- CÁC KIỂU DỮ LIỆU ---
 type SkillLevel = 'Mới chơi' | 'Yếu-' | 'Yếu' | 'Yếu+' | 'Trung bình-' | 'Trung bình' | 'Trung bình+' | 'Khá-' | 'Khá' | 'Khá+';
@@ -196,6 +198,7 @@ const dict = {
     draftTitle: "XẾP THỦ CÔNG",
     draftSelected: "Đã chọn",
     draftWaiting: "Đang rảnh",
+    partnerWarn: "{a} & {b} đã đánh chung {n} trận",
     draftStart: "VÀO SÂN",
     draftCancel: "HỦY",
     roleSelectTitle: "Bạn muốn truy cập với tư cách nào?",
@@ -386,6 +389,7 @@ const dict = {
     draftTitle: "MANUAL SETUP",
     draftSelected: "Selected",
     draftWaiting: "Available",
+    partnerWarn: "{a} & {b} already partnered {n} time(s)",
     draftStart: "START",
     draftCancel: "CANCEL",
     roleSelectTitle: "How would you like to access?",
@@ -571,6 +575,8 @@ export default function ClassicApp() {
   const roomCreatedRef = useRef(0); // lúc tạo phòng = giờ bắt đầu buổi chơi
   const applyPlayers = (next: Player[]) => { playersRef.current = next; setPlayers(next); };
   const applyCourts = (next: CourtData[]) => { courtRef.current = next; setCourtData(next); };
+  const [matchHistory, setMatchHistory] = useState<MatchRecord[]>([]); // bản hiển thị: tab Sân + cảnh báo xếp tay
+  const applyHistory = (next: MatchRecord[]) => { historyRef.current = next; setMatchHistory(next); };
   const writeQueue = useRef<Promise<void>>(Promise.resolve());
   const pendingWrites = useRef(0);
   const missedRealtime = useRef(false);
@@ -685,7 +691,7 @@ export default function ClassicApp() {
     const applyRoom = (room: RecordModel) => {
         applyCourts((room.courts as CourtData[]) || []);
         setRoomName(room.name || '');
-        historyRef.current = (room.history as MatchRecord[]) || [];
+        applyHistory((room.history as MatchRecord[]) || []);
         roomCreatedRef.current = Date.parse(String(room.created || '').replace(' ', 'T')) || 0;
         if (userRole === 'guest' || !hostSettingsLoaded.current) {
             setSettings({ ...DEFAULT_SETTINGS, ...(room.settings || {}) });
@@ -775,7 +781,7 @@ export default function ClassicApp() {
       const ids = Object.keys(updates);
       applyPlayers(playersRef.current.map(p => updates[p.id] ? { ...p, ...updates[p.id] } : p));
       if (newCourts) applyCourts(newCourts);
-      if (newHistory) historyRef.current = newHistory;
+      if (newHistory) applyHistory(newHistory);
       if (ids.length === 0 && !newCourts && !newSettings && !newHistory) return;
       const rid = roomId;
       pendingWrites.current++;
@@ -1122,6 +1128,16 @@ export default function ClassicApp() {
   const handleCancelDrafting = (courtId: number) => {
     if(userRole === 'guest') return;
     commit({}, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'available' as const, playerIds: [] } : c));
+  };
+
+  // Xếp tay: cặp cùng đội đã từng đánh chung trong phòng → cảnh báo (không chặn)
+  const draftWarnings = (court: Court) =>
+      partnerWarnings(matchHistory, draftTeams(court.players, court.matchType, effectiveCategory(court.matchType, court.category)))
+          .map(w => t.partnerWarn.replace('{a}', players.find(p => p.id === w.a)?.name ?? '?').replace('{b}', players.find(p => p.id === w.b)?.name ?? '?').replace('{n}', String(w.count)));
+  // Nếu chọn thêm người này: số trận đã đánh chung với đồng đội sẽ ghép cùng
+  const partneredIfPicked = (court: Court, p: Player) => {
+      const team = draftTeams([...court.players, p], court.matchType, effectiveCategory(court.matchType, court.category)).find(tm => tm.includes(p.id)) || [];
+      return Math.max(0, ...team.filter(id => id !== p.id).map(id => partnerCount(matchHistory, p.id, id)));
   };
 
   const handleToggleDraftPlayer = (courtId: number, player: Player) => {
@@ -1770,13 +1786,14 @@ export default function ClassicApp() {
                                                   <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-[#3b82f6] text-white border-2 border-black px-2 py-1 text-[10px] font-bold cursor-pointer hover:bg-red-500 hover:line-through transition-colors flex items-center gap-1 shadow-[1px_1px_0_0_#000]">{p.name} {renderGenderIcon(p.gender)} <i className="fa-solid fa-xmark text-[8px] ml-1"></i></span>
                                               ))}
                                           </div>
+                                          {draftWarnings(court).map(w => <p key={w} className="text-[10px] font-bold text-orange-700"><i className="fa-solid fa-triangle-exclamation mr-1"></i>{w}</p>)}
                                       </div>
 
                                       <div className="flex-1 overflow-y-auto border-t-[2px] border-black pt-2 mb-3 custom-scrollbar z-10">
                                            <div className="text-[9px] font-bold text-gray-500 mb-1.5">{t.draftWaiting}:</div>
                                            <div className="flex flex-wrap gap-1.5">
                                                {players.filter(p => p.status === 'waiting' && !court.players.some(cp => cp.id === p.id) && fitsCategory(p, effectiveCategory(court.matchType, court.category))).map(p => (
-                                                   <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-white border-2 border-black px-2 py-1 text-[10px] font-bold cursor-pointer hover:bg-green-300 transition-colors shadow-[1px_1px_0_0_#000]">{p.name} {renderGenderIcon(p.gender)}</span>
+                                                   <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-white border-2 border-black px-2 py-1 text-[10px] font-bold cursor-pointer hover:bg-green-300 transition-colors shadow-[1px_1px_0_0_#000]">{p.name} {renderGenderIcon(p.gender)}{(() => { const n = partneredIfPicked(court, p); return n > 0 && <span className="ml-1 bg-yellow-300 border border-black px-1 text-[9px]"><i className="fa-solid fa-user-group mr-0.5"></i>{n}</span>; })()}</span>
                                                ))}
                                            </div>
                                       </div>
@@ -1902,10 +1919,11 @@ export default function ClassicApp() {
                                                             {court.players.map(p => <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-[#3b82f6] text-white border border-black px-1.5 py-0.5 text-[10px] font-bold cursor-pointer hover:bg-red-500 hover:line-through">{p.name} {renderGenderIcon(p.gender)}</span>)}
                                                         </div>
                                                     </div>
+                                                    {draftWarnings(court).map(w => <p key={w} className="text-[10px] font-bold text-orange-700"><i className="fa-solid fa-triangle-exclamation mr-1"></i>{w}</p>)}
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] font-bold text-gray-500">{t.draftWaiting}:</span>
                                                         <div className="flex flex-wrap gap-1 max-w-[400px]">
-                                                            {players.filter(p => p.status === 'waiting' && !court.players.some(cp => cp.id === p.id) && fitsCategory(p, effectiveCategory(court.matchType, court.category))).map(p => <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-white border border-black px-1.5 py-0.5 text-[10px] font-bold cursor-pointer hover:bg-green-200">{p.name} {renderGenderIcon(p.gender)}</span>)}
+                                                            {players.filter(p => p.status === 'waiting' && !court.players.some(cp => cp.id === p.id) && fitsCategory(p, effectiveCategory(court.matchType, court.category))).map(p => <span key={p.id} onClick={() => handleToggleDraftPlayer(court.id, p)} className="bg-white border border-black px-1.5 py-0.5 text-[10px] font-bold cursor-pointer hover:bg-green-200">{p.name} {renderGenderIcon(p.gender)}{(() => { const n = partneredIfPicked(court, p); return n > 0 && <span className="ml-1 bg-yellow-300 border border-black px-1 text-[9px]"><i className="fa-solid fa-user-group mr-0.5"></i>{n}</span>; })()}</span>)}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1950,6 +1968,7 @@ export default function ClassicApp() {
                         </table>
                     </div>
                 )}
+                {players.length > 0 && <RecentMatches matches={sessionMatches(matchHistory, players)} lang={lang} variant="classic" />}
               </div>
             )}
 

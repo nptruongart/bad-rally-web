@@ -29,7 +29,9 @@ function DPill({ tone, children }: { tone: keyof typeof DPILL; children: React.R
 }
 import { unlockAudio, alertCalledToCourt, stopTitleFlash } from "../lib/alerts";
 import { pickMatch, genderOf, effectiveCategory, fitsCategory, teamFitsCategory, type MatchRecord, type MatchCategory } from "../lib/matchmaking";
-import { buildSession, hasContent } from "../lib/session";
+import { buildSession, hasContent, sessionMatches } from "../lib/session";
+import { partnerCount, partnerWarnings, draftTeams } from "../lib/partners";
+import RecentMatches from "./RecentMatches";
 
 // --- CÁC KIỂU DỮ LIỆU ---
 type SkillLevel = 'Mới chơi' | 'Yếu-' | 'Yếu' | 'Yếu+' | 'Trung bình-' | 'Trung bình' | 'Trung bình+' | 'Khá-' | 'Khá' | 'Khá+';
@@ -232,6 +234,7 @@ const dict = {
     draftTitle: "Xếp thủ công",
     draftSelected: "Đã chọn",
     draftWaiting: "Đang rảnh",
+    partnerWarn: "{a} & {b} đã đánh chung {n} trận",
     draftStart: "Vào sân",
     draftCancel: "Hủy",
     roleSelectTitle: "Bạn muốn truy cập với tư cách nào?",
@@ -439,6 +442,7 @@ const dict = {
     draftTitle: "Manual setup",
     draftSelected: "Selected",
     draftWaiting: "Available",
+    partnerWarn: "{a} & {b} already partnered {n} time(s)",
     draftStart: "Start",
     draftCancel: "Cancel",
     roleSelectTitle: "How would you like to access?",
@@ -616,6 +620,8 @@ export default function ModernApp() {
   const roomCreatedRef = useRef(0); // lúc tạo phòng = giờ bắt đầu buổi chơi
   const applyPlayers = (next: Player[]) => { playersRef.current = next; setPlayers(next); };
   const applyCourts = (next: CourtData[]) => { courtRef.current = next; setCourtData(next); };
+  const [matchHistory, setMatchHistory] = useState<MatchRecord[]>([]); // bản hiển thị: tab Sân + cảnh báo xếp tay
+  const applyHistory = (next: MatchRecord[]) => { historyRef.current = next; setMatchHistory(next); };
   const writeQueue = useRef<Promise<void>>(Promise.resolve());
   const pendingWrites = useRef(0);
   const missedRealtime = useRef(false);
@@ -730,7 +736,7 @@ export default function ModernApp() {
     const applyRoom = (room: RecordModel) => {
         applyCourts((room.courts as CourtData[]) || []);
         setRoomName(room.name || '');
-        historyRef.current = (room.history as MatchRecord[]) || [];
+        applyHistory((room.history as MatchRecord[]) || []);
         roomCreatedRef.current = Date.parse(String(room.created || '').replace(' ', 'T')) || 0;
         if (userRole === 'guest' || !hostSettingsLoaded.current) {
             setSettings({ ...DEFAULT_SETTINGS, ...(room.settings || {}) });
@@ -820,7 +826,7 @@ export default function ModernApp() {
       const ids = Object.keys(updates);
       applyPlayers(playersRef.current.map(p => updates[p.id] ? { ...p, ...updates[p.id] } : p));
       if (newCourts) applyCourts(newCourts);
-      if (newHistory) historyRef.current = newHistory;
+      if (newHistory) applyHistory(newHistory);
       if (ids.length === 0 && !newCourts && !newSettings && !newHistory) return;
       const rid = roomId;
       pendingWrites.current++;
@@ -1167,6 +1173,16 @@ export default function ModernApp() {
   const handleCancelDrafting = (courtId: number) => {
     if(userRole === 'guest') return;
     commit({}, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'available' as const, playerIds: [] } : c));
+  };
+
+  // Xếp tay: cặp cùng đội đã từng đánh chung trong phòng → cảnh báo (không chặn)
+  const draftWarnings = (court: Court) =>
+      partnerWarnings(matchHistory, draftTeams(court.players, court.matchType, effectiveCategory(court.matchType, court.category)))
+          .map(w => t.partnerWarn.replace('{a}', players.find(p => p.id === w.a)?.name ?? '?').replace('{b}', players.find(p => p.id === w.b)?.name ?? '?').replace('{n}', String(w.count)));
+  // Nếu chọn thêm người này: số trận đã đánh chung với đồng đội sẽ ghép cùng
+  const partneredIfPicked = (court: Court, p: Player) => {
+      const team = draftTeams([...court.players, p], court.matchType, effectiveCategory(court.matchType, court.category)).find(tm => tm.includes(p.id)) || [];
+      return Math.max(0, ...team.filter(id => id !== p.id).map(id => partnerCount(matchHistory, p.id, id)));
   };
 
   const handleToggleDraftPlayer = (courtId: number, player: Player) => {
@@ -1795,6 +1811,7 @@ export default function ModernApp() {
                                     {court.players.length === 0 && <span className="text-xs text-slate-500">{t.draftSelected} (0/{neededPlayers})</span>}
                                     {court.players.map(p => <span key={p.id} className="rounded-full bg-blue-500/20 text-blue-200 px-2.5 py-1 text-xs font-semibold">{p.name}</span>)}
                                   </div>
+                                  {draftWarnings(court).map(w => <p key={w} className="text-[11px] text-amber-300"><i className="fa-solid fa-triangle-exclamation mr-1"></i>{w}</p>)}
                                   {userRole === 'host' && (
                                     <button onClick={() => setSheetCourtId(court.id)} className="rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm py-2.5"><i className="fa-solid fa-hand-pointer mr-1.5"></i>{t.continuePicking} ({court.players.length}/{neededPlayers})</button>
                                   )}
@@ -1908,6 +1925,7 @@ export default function ModernApp() {
                         </table>
                     </div>
                 )}
+                {players.length > 0 && <RecentMatches matches={sessionMatches(matchHistory, players)} lang={lang} variant="modern" />}
               </div>
             )}
 
@@ -2201,10 +2219,11 @@ export default function ModernApp() {
                       <button key={p.id} onClick={() => { buzz(8); handleToggleDraftPlayer(sc.id, p); }} className="br-pop rounded-full bg-blue-500 text-white pl-3 pr-2.5 py-1.5 text-sm font-semibold inline-flex items-center gap-1.5">{p.name} {renderGenderIcon(p.gender)}<i className="fa-solid fa-xmark text-[10px] opacity-70"></i></button>
                     ))}
                   </div>
+                  {draftWarnings(sc).map(w => <p key={w} className="br-fade -mt-1 mb-2 text-xs text-amber-300"><i className="fa-solid fa-triangle-exclamation mr-1.5"></i>{w}</p>)}
                   <div className="text-xs font-semibold text-slate-400 mb-2 border-t border-white/[0.06] pt-3">{t.draftWaiting} ({free.length})</div>
                   <div className="flex-1 min-h-0 overflow-y-auto flex flex-wrap content-start gap-1.5 pb-2">
                     {free.map(p => (
-                      <button key={p.id} onClick={() => { buzz(8); handleToggleDraftPlayer(sc.id, p); }} disabled={sc.players.length >= needed} className="rounded-full bg-white/[0.06] hover:bg-lime-400/20 text-slate-200 px-3 py-1.5 text-sm font-semibold transition disabled:opacity-40">{p.name} {renderGenderIcon(p.gender)}</button>
+                      <button key={p.id} onClick={() => { buzz(8); handleToggleDraftPlayer(sc.id, p); }} disabled={sc.players.length >= needed} className="rounded-full bg-white/[0.06] hover:bg-lime-400/20 text-slate-200 px-3 py-1.5 text-sm font-semibold transition disabled:opacity-40">{p.name} {renderGenderIcon(p.gender)}{(() => { const n = partneredIfPicked(sc, p); return n > 0 && <span className="ml-1 rounded-full bg-amber-400/20 text-amber-300 text-[10px] px-1.5 py-px"><i className="fa-solid fa-user-group mr-0.5"></i>{n}</span>; })()}</button>
                     ))}
                   </div>
                   <div className="grid grid-cols-[1fr_2fr] gap-2 pt-3">

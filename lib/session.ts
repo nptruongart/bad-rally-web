@@ -13,14 +13,19 @@ export interface SessionSnapshot {
 
 type RoomPlayer = { id: string; name: string; gender?: 'M' | 'F'; skill: string; playCount: number; wins: number };
 
+// Các trận theo thứ tự thời gian, có tên (ưu tiên tên lúc đánh) và đội thắng
+export function sessionMatches(history: MatchRecord[], players: { id: string; name: string }[]): SessionMatch[] {
+  const nameOf = new Map(players.map(p => [p.id, p.name]));
+  const names = (ids: string[], saved?: string[]) => saved && saved.length === ids.length ? saved : ids.map(id => nameOf.get(id) ?? '?');
+  return [...history].sort((x, y) => x.at - y.at)
+    .map((r): SessionMatch => ({ a: names(r.t1, r.n1), b: names(r.t2, r.n2), w: r.w ?? 0, at: r.at }));
+}
+
 export function buildSession(input: {
   roomName: string; pin: string; roomCreated: number; now: number;
   players: RoomPlayer[]; history: MatchRecord[];
 }): SessionSnapshot {
-  const nameOf = new Map(input.players.map(p => [p.id, p.name]));
-  const names = (ids: string[], saved?: string[]) => saved && saved.length === ids.length ? saved : ids.map(id => nameOf.get(id) ?? '?');
-  const matches = [...input.history].sort((x, y) => x.at - y.at)
-    .map((r): SessionMatch => ({ a: names(r.t1, r.n1), b: names(r.t2, r.n2), w: r.w ?? 0, at: r.at }));
+  const matches = sessionMatches(input.history, input.players);
   const players = input.players.filter(p => p.playCount > 0)
     .map(p => ({ name: p.name, gender: p.gender, skill: p.skill, played: p.playCount, wins: p.wins }))
     .sort((x, y) => y.wins - x.wins || x.played - y.played || x.name.localeCompare(y.name, 'vi'));
