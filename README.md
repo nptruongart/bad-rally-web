@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bad Rally
 
-## Getting Started
+App xếp trận cầu lông (và tennis, bóng bàn) cho sân và câu lạc bộ. Chủ sân tạo phòng, người chơi quét mã QR để vào. App ghép cặp công bằng, xoay vòng sân, báo tới lượt, ghi tỉ số, xếp hạng và lưu lịch sử buổi chơi. Có chế độ giải đấu.
 
-First, run the development server:
+© 2026 iDean. Bảo lưu mọi quyền.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Công nghệ
+
+- **Web:** Next.js 16 (xuất tĩnh), React, Tailwind CSS
+- **Máy chủ:** PocketBase 0.40.5 (`pocketbase/pb_migrations`, `pocketbase/pb_hooks`), chạy sau Caddy
+- **Android:** Capacitor (`com.idean.badrally`)
+
+## Chạy ở máy
+
+```powershell
+npm install
+.\scripts\local-pb.ps1          # PocketBase local ở http://127.0.0.1:8090 (dữ liệu ở .local/pb_data)
+$env:NEXT_PUBLIC_PB_URL = "http://127.0.0.1:8090"; npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- Test: `npm test`
+- Chuẩn bị PocketBase local (tài khoản quản trị thử + mã mời chủ sân): `node scripts/seed-local.mjs`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```powershell
+.\deploy\deploy.ps1 -Key $env:USERPROFILE\.ssh\badrally-oracle.key
+```
 
-## Learn More
+Script tự build bản tĩnh rồi đưa lên VPS. Muốn đổi cấu trúc dữ liệu: sao lưu `pb_data` trên server, chép migration hoặc hook mới, rồi khởi động lại PocketBase. Cấu hình server nằm trong `deploy/`.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Không commit thư mục `private/` hay bất kỳ mã mời hoặc mật khẩu nào.
