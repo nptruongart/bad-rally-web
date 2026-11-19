@@ -64,3 +64,13 @@ test('còn bao nhiêu ngày trước khi tự xóa (giữ 30 ngày, làm tròn l
   assert.equal(daysLeft(T0, T0 + 29.5 * DAY), 1);
   assert.equal(daysLeft(T0, T0 + 31 * DAY), 0);
 });
+
+test('trận có tỉ số thì giữ tỉ số khi lưu buổi chơi', () => {
+  const s = buildSession({
+    roomName: '', pin: '1', roomCreated: T0, now: T0 + 1,
+    players: [P('a', 'A', 1, 1), P('b', 'B', 1, 0)],
+    history: [{ t1: ['a'], t2: ['b'], at: T0, w: 1, s: [21, 17] }, { t1: ['b'], t2: ['a'], at: T0 + 5, w: 2 }],
+  });
+  assert.deepEqual(s.matches[0].s, [21, 17]);
+  assert.equal(s.matches[1].s, undefined);
+});

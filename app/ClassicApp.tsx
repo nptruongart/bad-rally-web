@@ -13,6 +13,8 @@ import { pickMatch, genderOf, effectiveCategory, fitsCategory, teamFitsCategory,
 import { buildSession, hasContent, sessionMatches } from "../lib/session";
 import { partnerCount, partnerWarnings, draftTeams } from "../lib/partners";
 import RecentMatches from "./RecentMatches";
+import ScoreEntry from "./ScoreEntry";
+import { formatScore, type Score } from "../lib/score";
 
 // --- CÁC KIỂU DỮ LIỆU ---
 type SkillLevel = 'Mới chơi' | 'Yếu-' | 'Yếu' | 'Yếu+' | 'Trung bình-' | 'Trung bình' | 'Trung bình+' | 'Khá-' | 'Khá' | 'Khá+';
@@ -537,7 +539,7 @@ export default function ClassicApp() {
   const [calledAlert, setCalledAlert] = useState(false); // khách vừa được gọi vào sân
   const [scannerOpen, setScannerOpen] = useState(false); // quét QR bằng camera trong app
   // Kết quả trận vừa ghi (chủ sân) → cho phép hoàn tác khi bấm nhầm
-  const [lastResult, setLastResult] = useState<{ courtId: number; court: CourtData; players: Record<string, Partial<Player>>; at: number; addedHistory: boolean; winningTeam: 1 | 2 | 0 | -1 } | null>(null);
+  const [lastResult, setLastResult] = useState<{ courtId: number; court: CourtData; players: Record<string, Partial<Player>>; at: number; addedHistory: boolean; winningTeam: 1 | 2 | 0 | -1; score?: Score } | null>(null);
 
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -1192,7 +1194,7 @@ export default function ClassicApp() {
   };
 
   // winningTeam: 1/2 = đội thắng, -1 = kết thúc không ghi điểm (vẫn tính trận), 0 = hủy trận (không tính)
-  const handleMatchResult = (courtId: number, winningTeam: 1 | 2 | 0 | -1) => {
+  const handleMatchResult = (courtId: number, winningTeam: 1 | 2 | 0 | -1, score?: Score) => {
     if(userRole === 'guest') return;
     const court = courtRef.current.find(c => c.id === courtId);
     if (!court) return;
@@ -1212,7 +1214,7 @@ export default function ClassicApp() {
     // Trận có diễn ra (không phải hủy) → lưu lịch sử ghép cặp, giữ 300 trận gần nhất
     const team2Ids = court.playerIds.slice(topCount);
     const namesOf = (ids: string[]) => ids.map(id => playersRef.current.find(x => x.id === id)?.name ?? '?');
-    const record: MatchRecord = { t1: team1Ids, t2: team2Ids, at: now, n1: namesOf(team1Ids), n2: namesOf(team2Ids), ...(winningTeam > 0 ? { w: winningTeam as 1 | 2 } : {}) };
+    const record: MatchRecord = { t1: team1Ids, t2: team2Ids, at: now, n1: namesOf(team1Ids), n2: namesOf(team2Ids), ...(winningTeam > 0 ? { w: winningTeam as 1 | 2 } : {}), ...(score && winningTeam > 0 ? { s: score } : {}) };
     const newHistory = winningTeam === 0 ? undefined : [...historyRef.current, record].slice(-300);
     // Ghi nhớ trạng thái trước đó để hoàn tác nếu bấm nhầm
     const before: Record<string, Partial<Player>> = {};
@@ -1220,7 +1222,7 @@ export default function ClassicApp() {
         const p = playersRef.current.find(x => x.id === id)!;
         before[id] = { status: p.status, waitSince: p.waitSince, playCount: p.playCount, wins: p.wins };
     }
-    setLastResult({ courtId, court, players: before, at: now, addedHistory: !!newHistory, winningTeam });
+    setLastResult({ courtId, court, players: before, at: now, addedHistory: !!newHistory, winningTeam, score });
     commit(updates, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'available' as const, playerIds: [] } : c), undefined, newHistory);
   };
 
@@ -1845,6 +1847,7 @@ export default function ClassicApp() {
                             {/* CHỌN ĐỘI THẮNG */}
                             {court.status === 'scoring' && settings.trackMatchResults && userRole === 'host' && (
                               <div className="flex flex-col gap-1.5 w-full mt-1">
+                                  <ScoreEntry lang={lang} variant="classic" onSave={(sc, w) => handleMatchResult(court.id, w, sc)} />
                                   <div className="flex gap-1.5">
                                       <button onClick={() => handleMatchResult(court.id, 1)} className="flex-1 bg-blue-600 text-white rounded py-2 text-[10px] font-black border-[2px] border-black hover:bg-blue-500 shadow-[2px_2px_0_0_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"><i className="fa-solid fa-trophy text-yellow-300 mr-1"></i> {t.team1Win}</button>
                                       <button onClick={() => handleMatchResult(court.id, 2)} className="flex-1 bg-red-500 text-white rounded py-2 text-[10px] font-black border-[2px] border-black hover:bg-red-400 shadow-[2px_2px_0_0_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all"><i className="fa-solid fa-trophy text-yellow-300 mr-1"></i> {t.team2Win}</button>
@@ -1952,7 +1955,8 @@ export default function ClassicApp() {
                                                 </div>
                                             )}
                                             {court.status === 'scoring' && settings.trackMatchResults && userRole === 'host' && (
-                                                <div className="flex flex-col gap-1 items-center justify-center w-[150px]">
+                                                <div className="flex flex-col gap-1 items-center justify-center w-[190px]">
+                                                    <ScoreEntry lang={lang} variant="classic" compact onSave={(sc, w) => handleMatchResult(court.id, w, sc)} />
                                                     <div className="flex gap-1 w-full">
                                                         <button onClick={() => handleMatchResult(court.id, 1)} className="flex-1 bg-blue-600 text-white text-[9px] font-black py-1.5 border-2 border-black shadow-[1px_1px_0_0_#000] hover:bg-blue-500 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all">{t.team1Win}</button>
                                                         <button onClick={() => handleMatchResult(court.id, 2)} className="flex-1 bg-red-500 text-white text-[9px] font-black py-1.5 border-2 border-black shadow-[1px_1px_0_0_#000] hover:bg-red-400 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none transition-all">{t.team2Win}</button>
@@ -2223,7 +2227,7 @@ export default function ClassicApp() {
       {/* THANH HOÀN TÁC KẾT QUẢ VỪA GHI */}
       {userRole === 'host' && lastResult && (
         <div className="fixed bottom-[152px] left-1/2 -translate-x-1/2 w-[calc(100%-32px)] max-w-md z-[55] bg-black text-white border-[3px] border-black shadow-[4px_4px_0_0_#facc15] flex items-center gap-2 px-3 py-2">
-          <span className="flex-1 min-w-0 text-xs font-bold truncate"><i className="fa-solid fa-check text-green-400 mr-1"></i>{t.undoLabel.replace('{court}', courtNameById(lastResult.courtId))}: {lastResult.winningTeam === 1 ? t.team1Win : lastResult.winningTeam === 2 ? t.team2Win : lastResult.winningTeam === 0 ? t.cancelMatch : t.undoFinished}</span>
+          <span className="flex-1 min-w-0 text-xs font-bold truncate"><i className="fa-solid fa-check text-green-400 mr-1"></i>{t.undoLabel.replace('{court}', courtNameById(lastResult.courtId))}: {lastResult.winningTeam === 1 ? t.team1Win : lastResult.winningTeam === 2 ? t.team2Win : lastResult.winningTeam === 0 ? t.cancelMatch : t.undoFinished}{lastResult.score && ` ${formatScore(lastResult.score)}`}</span>
           <button onClick={handleUndoResult} className="shrink-0 bg-yellow-300 text-black border-2 border-white px-2 py-1 text-[11px] font-black uppercase"><i className="fa-solid fa-rotate-left mr-1"></i>{t.undoBtn}</button>
           <button onClick={() => setLastResult(null)} className="shrink-0 text-gray-400 hover:text-white px-1" aria-label="close"><i className="fa-solid fa-xmark"></i></button>
         </div>

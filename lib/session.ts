@@ -5,7 +5,7 @@ export const SESSION_TTL_DAYS = 30;
 const DAY = 86_400_000;
 
 export interface SessionPlayer { name: string; gender?: 'M' | 'F'; skill: string; played: number; wins: number }
-export interface SessionMatch { a: string[]; b: string[]; w: 0 | 1 | 2; at: number }
+export interface SessionMatch { a: string[]; b: string[]; w: 0 | 1 | 2; at: number; s?: [number, number] }
 export interface SessionSnapshot {
   roomName: string; pin: string; startedAt: number; endedAt: number;
   players: SessionPlayer[]; matches: SessionMatch[];
@@ -18,7 +18,7 @@ export function sessionMatches(history: MatchRecord[], players: { id: string; na
   const nameOf = new Map(players.map(p => [p.id, p.name]));
   const names = (ids: string[], saved?: string[]) => saved && saved.length === ids.length ? saved : ids.map(id => nameOf.get(id) ?? '?');
   return [...history].sort((x, y) => x.at - y.at)
-    .map((r): SessionMatch => ({ a: names(r.t1, r.n1), b: names(r.t2, r.n2), w: r.w ?? 0, at: r.at }));
+    .map((r): SessionMatch => ({ a: names(r.t1, r.n1), b: names(r.t2, r.n2), w: r.w ?? 0, at: r.at, ...(r.s ? { s: r.s } : {}) }));
 }
 
 export function buildSession(input: {

@@ -32,6 +32,8 @@ import { pickMatch, genderOf, effectiveCategory, fitsCategory, teamFitsCategory,
 import { buildSession, hasContent, sessionMatches } from "../lib/session";
 import { partnerCount, partnerWarnings, draftTeams } from "../lib/partners";
 import RecentMatches from "./RecentMatches";
+import ScoreEntry from "./ScoreEntry";
+import { formatScore, type Score } from "../lib/score";
 
 // --- CÁC KIỂU DỮ LIỆU ---
 type SkillLevel = 'Mới chơi' | 'Yếu-' | 'Yếu' | 'Yếu+' | 'Trung bình-' | 'Trung bình' | 'Trung bình+' | 'Khá-' | 'Khá' | 'Khá+';
@@ -580,7 +582,7 @@ export default function ModernApp() {
   const [calledAlert, setCalledAlert] = useState(false); // khách vừa được gọi vào sân
   const [scannerOpen, setScannerOpen] = useState(false); // quét QR bằng camera trong app
   // Kết quả trận vừa ghi (chủ sân) → cho phép hoàn tác khi bấm nhầm
-  const [lastResult, setLastResult] = useState<{ courtId: number; court: CourtData; players: Record<string, Partial<Player>>; at: number; addedHistory: boolean; winningTeam: 1 | 2 | 0 | -1 } | null>(null);
+  const [lastResult, setLastResult] = useState<{ courtId: number; court: CourtData; players: Record<string, Partial<Player>>; at: number; addedHistory: boolean; winningTeam: 1 | 2 | 0 | -1; score?: Score } | null>(null);
 
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -1237,7 +1239,7 @@ export default function ModernApp() {
   };
 
   // winningTeam: 1/2 = đội thắng, -1 = kết thúc không ghi điểm (vẫn tính trận), 0 = hủy trận (không tính)
-  const handleMatchResult = (courtId: number, winningTeam: 1 | 2 | 0 | -1) => {
+  const handleMatchResult = (courtId: number, winningTeam: 1 | 2 | 0 | -1, score?: Score) => {
     if(userRole === 'guest') return;
     const court = courtRef.current.find(c => c.id === courtId);
     if (!court) return;
@@ -1257,7 +1259,7 @@ export default function ModernApp() {
     // Trận có diễn ra (không phải hủy) → lưu lịch sử ghép cặp, giữ 300 trận gần nhất
     const team2Ids = court.playerIds.slice(topCount);
     const namesOf = (ids: string[]) => ids.map(id => playersRef.current.find(x => x.id === id)?.name ?? '?');
-    const record: MatchRecord = { t1: team1Ids, t2: team2Ids, at: now, n1: namesOf(team1Ids), n2: namesOf(team2Ids), ...(winningTeam > 0 ? { w: winningTeam as 1 | 2 } : {}) };
+    const record: MatchRecord = { t1: team1Ids, t2: team2Ids, at: now, n1: namesOf(team1Ids), n2: namesOf(team2Ids), ...(winningTeam > 0 ? { w: winningTeam as 1 | 2 } : {}), ...(score && winningTeam > 0 ? { s: score } : {}) };
     const newHistory = winningTeam === 0 ? undefined : [...historyRef.current, record].slice(-300);
     // Ghi nhớ trạng thái trước đó để hoàn tác nếu bấm nhầm
     const before: Record<string, Partial<Player>> = {};
@@ -1265,7 +1267,7 @@ export default function ModernApp() {
         const p = playersRef.current.find(x => x.id === id)!;
         before[id] = { status: p.status, waitSince: p.waitSince, playCount: p.playCount, wins: p.wins };
     }
-    setLastResult({ courtId, court, players: before, at: now, addedHistory: !!newHistory, winningTeam });
+    setLastResult({ courtId, court, players: before, at: now, addedHistory: !!newHistory, winningTeam, score });
     commit(updates, courtRef.current.map(c => c.id === courtId ? { ...c, status: 'available' as const, playerIds: [] } : c), undefined, newHistory);
   };
 
@@ -1828,6 +1830,7 @@ export default function ModernApp() {
                                   )}
                                   {court.status === 'scoring' && settings.trackMatchResults && userRole === 'host' && (
                                     <>
+                                      <ScoreEntry lang={lang} variant="modern" onSave={(sc, w) => { buzz([10, 40, 10]); handleMatchResult(court.id, w, sc); }} />
                                       <div className="grid grid-cols-2 gap-2 mt-0.5">
                                         <button onClick={() => { buzz([10, 40, 10]); handleMatchResult(court.id, 1); }} className="rounded-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm py-2.5 active:scale-[0.98] transition"><i className="fa-solid fa-trophy text-amber-300 mr-1.5"></i>{t.team1Win}</button>
                                         <button onClick={() => { buzz([10, 40, 10]); handleMatchResult(court.id, 2); }} className="rounded-full bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm py-2.5 active:scale-[0.98] transition"><i className="fa-solid fa-trophy text-amber-200 mr-1.5"></i>{t.team2Win}</button>
@@ -1903,7 +1906,7 @@ export default function ModernApp() {
                                         </td>
                                         <td className="px-4 py-3.5">
                                             {userRole === 'host' && (
-                                                <div className="flex gap-2 justify-end">
+                                                <div className="flex flex-wrap gap-2 justify-end items-center">
                                                     {court.status === 'available' && <button onClick={() => { buzz(); setSheetCourtId(court.id); }} className="rounded-full bg-lime-400 hover:bg-lime-300 text-slate-950 font-semibold text-sm px-4 py-2"><i className="fa-solid fa-plus mr-1.5"></i>{t.arrangeMatch}</button>}
                                                     {court.status === 'drafting' && <button onClick={() => setSheetCourtId(court.id)} className="rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold text-sm px-4 py-2">{t.continuePicking}</button>}
                                                     {court.status === 'active' && <>
@@ -1911,6 +1914,7 @@ export default function ModernApp() {
                                                         <button onClick={() => handleMatchResult(court.id, 0)} title={t.cancelMatch} aria-label={t.cancelMatch} className="w-9 h-9 rounded-full text-slate-500 hover:text-rose-400 hover:bg-rose-500/10"><i className="fa-solid fa-trash-can text-xs"></i></button>
                                                     </>}
                                                     {court.status === 'scoring' && settings.trackMatchResults && <>
+                                                        <ScoreEntry lang={lang} variant="modern" compact onSave={(sc, w) => { buzz([10, 40, 10]); handleMatchResult(court.id, w, sc); }} />
                                                         <button onClick={() => { buzz([10, 40, 10]); handleMatchResult(court.id, 1); }} className="rounded-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm px-3.5 py-2">{t.team1Win}</button>
                                                         <button onClick={() => { buzz([10, 40, 10]); handleMatchResult(court.id, 2); }} className="rounded-full bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm px-3.5 py-2">{t.team2Win}</button>
                                                         <button onClick={() => handleMatchResult(court.id, 0)} title={t.cancelResult} aria-label={t.cancelResult} className="w-9 h-9 rounded-full text-slate-500 hover:text-slate-200 hover:bg-white/10"><i className="fa-solid fa-xmark"></i></button>
@@ -2240,7 +2244,7 @@ export default function ModernApp() {
       {/* THANH HOÀN TÁC KẾT QUẢ VỪA GHI */}
       {userRole === 'host' && lastResult && (
         <div className="br-rise fixed bottom-[86px] left-1/2 -translate-x-1/2 w-[calc(100%-24px)] max-w-md z-[55] bg-[#1c2438] border border-white/10 text-white rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.45)] flex items-center gap-2 px-3.5 py-2.5">
-          <span className="flex-1 min-w-0 text-sm truncate"><i className="fa-solid fa-circle-check text-lime-400 mr-1.5"></i>{t.undoLabel.replace('{court}', courtNameById(lastResult.courtId))}: {lastResult.winningTeam === 1 ? t.team1Win : lastResult.winningTeam === 2 ? t.team2Win : lastResult.winningTeam === 0 ? t.cancelMatch : t.undoFinished}</span>
+          <span className="flex-1 min-w-0 text-sm truncate"><i className="fa-solid fa-circle-check text-lime-400 mr-1.5"></i>{t.undoLabel.replace('{court}', courtNameById(lastResult.courtId))}: {lastResult.winningTeam === 1 ? t.team1Win : lastResult.winningTeam === 2 ? t.team2Win : lastResult.winningTeam === 0 ? t.cancelMatch : t.undoFinished}{lastResult.score && ` ${formatScore(lastResult.score)}`}</span>
           <button onClick={handleUndoResult} className="shrink-0 rounded-full bg-white text-slate-950 px-3 py-1 text-xs font-semibold"><i className="fa-solid fa-rotate-left mr-1"></i>{t.undoBtn}</button>
           <button onClick={() => setLastResult(null)} className="shrink-0 text-slate-500 hover:text-white px-1" aria-label="close"><i className="fa-solid fa-xmark"></i></button>
         </div>

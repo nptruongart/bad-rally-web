@@ -139,6 +139,7 @@ export default function SessionHistory() {
                           <span className={`w-1 h-3.5 shrink-0 rounded-full ${bar}`}></span>
                           <span className="truncate">{team.join(" · ")}</span>
                           {m.w === side && <i className="fa-solid fa-trophy text-[10px]"></i>}
+                          {m.s && <span className="ml-auto pl-2 tabular-nums font-bold">{m.s[side - 1]}</span>}
                         </div>
                       ))}
                     </div>

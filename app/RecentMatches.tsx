@@ -16,10 +16,13 @@ export default function RecentMatches({ matches, lang, variant }: { matches: Ses
   const list = [...matches].reverse().slice(0, shown);
   const modern = variant === "modern";
 
-  const team = (names: string[], won: boolean) => (
-    <span className={modern ? (won ? "text-lime-300 font-semibold" : "text-slate-300") : (won ? "font-black" : "font-bold text-gray-600")}>
-      {won && <i className={`fa-solid fa-trophy mr-1 text-[10px] ${modern ? "text-amber-300" : "text-yellow-500"}`}></i>}
-      {names.join(" & ")}
+  const team = (names: string[], won: boolean, pts?: number) => (
+    <span className={`flex items-baseline gap-2 ${modern ? (won ? "text-lime-300 font-semibold" : "text-slate-300") : (won ? "font-black" : "font-bold text-gray-600")}`}>
+      <span className="min-w-0">
+        {won && <i className={`fa-solid fa-trophy mr-1 text-[10px] ${modern ? "text-amber-300" : "text-yellow-500"}`}></i>}
+        {names.join(" & ")}
+      </span>
+      {pts !== undefined && <span className="ml-auto tabular-nums font-bold">{pts}</span>}
     </span>
   );
 
@@ -37,9 +40,9 @@ export default function RecentMatches({ matches, lang, variant }: { matches: Ses
             <div key={`${m.at}-${i}`} className={`flex gap-3 px-4 py-2.5 text-sm ${i > 0 ? (modern ? "border-t border-white/[0.04]" : "border-t border-gray-200") : ""}`}>
               <span className={`shrink-0 w-11 tabular-nums text-xs pt-0.5 ${modern ? "text-slate-500" : "text-gray-500 font-bold"}`}>{sessionTime(m.at)}</span>
               <div className="flex-1 min-w-0 leading-snug">
-                <div>{team(m.a, m.w === 1)}</div>
+                <div>{team(m.a, m.w === 1, m.s?.[0])}</div>
                 <div className={`text-[10px] uppercase tracking-wider ${modern ? "text-slate-600" : "text-gray-400 font-bold"}`}>vs</div>
-                <div>{team(m.b, m.w === 2)}</div>
+                <div>{team(m.b, m.w === 2, m.s?.[1])}</div>
                 {m.w === 0 && <div className={`text-[11px] italic ${modern ? "text-slate-500" : "text-gray-400"}`}>{tx.noWinner}</div>}
               </div>
             </div>
