@@ -33,7 +33,7 @@ import { buildSession, hasContent, sessionMatches } from "../lib/session";
 import { partnerCount, partnerWarnings, draftTeams } from "../lib/partners";
 import RecentMatches from "./RecentMatches";
 import ScoreEntry from "./ScoreEntry";
-import { formatScore, type Score } from "../lib/score";
+import { formatScore, formatDiff, pointDiffs, rankCompare, type Score } from "../lib/score";
 
 // --- CÁC KIỂU DỮ LIỆU ---
 type SkillLevel = 'Mới chơi' | 'Yếu-' | 'Yếu' | 'Yếu+' | 'Trung bình-' | 'Trung bình' | 'Trung bình+' | 'Khá-' | 'Khá' | 'Khá+';
@@ -151,6 +151,7 @@ const dict = {
     noMatchResults: "Chưa có kết quả trận đấu.",
     matchLabel: "Trận",
     winLabel: "Thắng",
+    diffLabel: "Hiệu số",
     gameSettings: "CÀI ĐẶT TRẬN ĐẤU",
     totalCourts: "Tổng số sân",
     courtsTxt: "sân",
@@ -359,6 +360,7 @@ const dict = {
     noMatchResults: "No match results recorded.",
     matchLabel: "Games",
     winLabel: "Wins",
+    diffLabel: "Pt diff",
     gameSettings: "GAME SETTINGS",
     totalCourts: "Total Courts",
     courtsTxt: "courts",
@@ -2019,7 +2021,8 @@ export default function ModernApp() {
 
             {/* TAB: XẾP HẠNG (RANKING): bục 3 người đầu + danh sách */}
             {activeTab === "ranking" && (() => {
-                const ranked = [...players].filter(p => p.playCount > 0).sort((a, b) => b.wins - a.wins || a.playCount - b.playCount);
+                const diffs = pointDiffs(matchHistory); // hiệu số từ các trận có nhập tỉ số
+                const ranked = [...players].filter(p => p.playCount > 0).sort((a, b) => rankCompare(a, b, diffs));
                 const medal = ['from-amber-300 to-amber-500 text-amber-950', 'from-slate-200 to-slate-400 text-slate-900', 'from-orange-300 to-orange-600 text-orange-950'];
                 const podium = [1, 0, 2].map(i => ranked[i] && { p: ranked[i], i }).filter(Boolean) as { p: Player; i: number }[];
                 return (
@@ -2038,7 +2041,7 @@ export default function ModernApp() {
                                 <div key={p.id} style={{ animationDelay: `${(i === 0 ? 2 : i === 1 ? 1 : 3) * 120}ms` }} className="br-rise flex flex-col items-center text-center">
                                     <div className={`rounded-full bg-gradient-to-b ${medal[i]} inline-flex items-center justify-center font-bold ${i === 0 ? 'w-16 h-16 text-2xl shadow-[0_0_30px_rgba(251,191,36,0.35)]' : 'w-12 h-12 text-lg'}`}>{p.name.trim().charAt(0).toUpperCase()}</div>
                                     <div className="font-bold text-sm mt-1.5 truncate max-w-full">{p.name}</div>
-                                    <div className="text-[11px] text-slate-400 tabular-nums">{p.wins} {t.winLabel} · {p.playCount} {t.matchLabel}</div>
+                                    <div className="text-[11px] text-slate-400 tabular-nums">{p.wins} {t.winLabel} · {p.playCount} {t.matchLabel}{diffs.has(p.id) && ` · ${formatDiff(diffs.get(p.id))}`}</div>
                                     <div className={`mt-2 w-full rounded-t-2xl bg-gradient-to-b ${medal[i]} font-bold text-xl inline-flex items-center justify-center ${i === 0 ? 'h-20' : i === 1 ? 'h-14' : 'h-10'}`}>{i + 1}</div>
                                 </div>
                             ))}
@@ -2058,7 +2061,7 @@ export default function ModernApp() {
                                     </div>
                                     <div className="text-right tabular-nums">
                                         <div className="font-bold text-lg leading-none text-lime-400">{p.wins}<span className="text-xs font-semibold text-slate-500"> {t.winLabel}</span></div>
-                                        <div className="text-[11px] text-slate-500 mt-0.5">{p.playCount} {t.matchLabel}</div>
+                                        <div className="text-[11px] text-slate-500 mt-0.5">{p.playCount} {t.matchLabel}{diffs.has(p.id) && <span title={t.diffLabel} className={`ml-1.5 font-semibold ${diffs.get(p.id)! > 0 ? 'text-lime-300' : diffs.get(p.id)! < 0 ? 'text-rose-300' : 'text-slate-400'}`}>{formatDiff(diffs.get(p.id))}</span>}</div>
                                     </div>
                                 </div>
                                 );

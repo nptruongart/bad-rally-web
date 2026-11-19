@@ -1,10 +1,11 @@
 // Buổi chơi: ảnh chụp kết quả của một phòng lúc chủ sân thoát (xếp hạng + từng trận), lưu 30 ngày
 import type { MatchRecord } from './matchmaking.ts';
+import { formatDiff, pointDiffs, rankCompare } from './score.ts';
 
 export const SESSION_TTL_DAYS = 30;
 const DAY = 86_400_000;
 
-export interface SessionPlayer { name: string; gender?: 'M' | 'F'; skill: string; played: number; wins: number }
+export interface SessionPlayer { name: string; gender?: 'M' | 'F'; skill: string; played: number; wins: number; diff?: number } // diff: hiệu số (chỉ khi có trận nhập tỉ số)
 export interface SessionMatch { a: string[]; b: string[]; w: 0 | 1 | 2; at: number; s?: [number, number] }
 export interface SessionSnapshot {
   roomName: string; pin: string; startedAt: number; endedAt: number;
@@ -26,9 +27,10 @@ export function buildSession(input: {
   players: RoomPlayer[]; history: MatchRecord[];
 }): SessionSnapshot {
   const matches = sessionMatches(input.history, input.players);
+  const diffs = pointDiffs(input.history);
   const players = input.players.filter(p => p.playCount > 0)
-    .map(p => ({ name: p.name, gender: p.gender, skill: p.skill, played: p.playCount, wins: p.wins }))
-    .sort((x, y) => y.wins - x.wins || x.played - y.played || x.name.localeCompare(y.name, 'vi'));
+    .sort((x, y) => rankCompare(x, y, diffs) || x.name.localeCompare(y.name, 'vi'))
+    .map((p): SessionPlayer => ({ name: p.name, gender: p.gender, skill: p.skill, played: p.playCount, wins: p.wins, ...(diffs.has(p.id) ? { diff: diffs.get(p.id) } : {}) }));
   return {
     roomName: input.roomName, pin: input.pin,
     startedAt: input.roomCreated || matches[0]?.at || input.now, endedAt: input.now,
@@ -46,7 +48,7 @@ export const sessionTime = (ms: number) => fmt(ms, { hour: '2-digit', minute: '2
 export function sessionText(s: SessionSnapshot): string {
   const head = `🏸 ${s.roomName || 'Buổi chơi'} – ${sessionDate(s.startedAt)} (${sessionTime(s.startedAt)}–${sessionTime(s.endedAt)})`;
   const stats = `${s.matches.length} trận · ${s.players.length} người`;
-  const rows = s.players.map((p, i) => `${i + 1}. ${p.name} – ${p.wins} thắng / ${p.played} trận`);
+  const rows = s.players.map((p, i) => `${i + 1}. ${p.name} – ${p.wins} thắng / ${p.played} trận${p.diff !== undefined ? ` (${formatDiff(p.diff)})` : ''}`);
   return [head, stats, '', 'Xếp hạng:', ...rows].join('\n');
 }
 

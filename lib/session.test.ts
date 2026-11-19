@@ -74,3 +74,16 @@ test('trận có tỉ số thì giữ tỉ số khi lưu buổi chơi', () => {
   assert.deepEqual(s.matches[0].s, [21, 17]);
   assert.equal(s.matches[1].s, undefined);
 });
+
+test('buổi chơi: bằng số trận thắng thì xếp theo hiệu số, có hiệu số trong bản gửi Zalo', () => {
+  const s = buildSession({
+    roomName: 'R', pin: '1', roomCreated: T0, now: T0 + 1,
+    players: [P('a', 'An', 1, 1), P('b', 'Bình', 1, 1), P('c', 'Cường', 2, 0)],
+    history: [
+      { t1: ['b'], t2: ['c'], at: T0, w: 1, s: [21, 19] },
+      { t1: ['a'], t2: ['c'], at: T0 + 1, w: 1, s: [21, 5] },
+    ],
+  });
+  assert.deepEqual(s.players.map(p => [p.name, p.diff]), [['An', 16], ['Bình', 2], ['Cường', -18]]);
+  assert.match(sessionText(s), /1\. An – 1 thắng \/ 1 trận \(\+16\)/);
+});

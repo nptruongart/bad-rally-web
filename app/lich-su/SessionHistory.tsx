@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { RecordModel } from "pocketbase";
 import { pb, ensureAuth, isHostAccount } from "../../lib/pb";
 import { daysLeft, sessionDate, sessionText, sessionTime, type SessionSnapshot } from "../../lib/session";
+import { formatDiff } from "../../lib/score";
 
 type Row = SessionSnapshot & { id: string };
 
@@ -119,7 +120,7 @@ export default function SessionHistory() {
                         <div className="font-semibold truncate">{p.name} {p.gender === "F" ? <span className="text-pink-400">♀</span> : <span className="text-blue-400">♂</span>}</div>
                         <div className="flex items-center gap-2 mt-1"><div className="h-1 w-24 rounded-full bg-slate-800 overflow-hidden"><div className="h-full bg-lime-400 rounded-full" style={{ width: `${rate}%` }}></div></div><span className="text-[11px] text-slate-500">{rate}%</span></div>
                       </div>
-                      <div className="text-right tabular-nums"><span className="font-bold text-lime-400">{p.wins}</span><span className="text-xs text-slate-500"> / {p.played} trận</span></div>
+                      <div className="text-right tabular-nums"><span className="font-bold text-lime-400">{p.wins}</span><span className="text-xs text-slate-500"> / {p.played} trận</span>{p.diff !== undefined && <span className={`ml-1.5 text-xs font-semibold ${p.diff > 0 ? "text-lime-300" : p.diff < 0 ? "text-rose-300" : "text-slate-400"}`}>{formatDiff(p.diff)}</span>}</div>
                     </div>
                   );
                 })}

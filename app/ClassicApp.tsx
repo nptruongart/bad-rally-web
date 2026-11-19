@@ -14,7 +14,7 @@ import { buildSession, hasContent, sessionMatches } from "../lib/session";
 import { partnerCount, partnerWarnings, draftTeams } from "../lib/partners";
 import RecentMatches from "./RecentMatches";
 import ScoreEntry from "./ScoreEntry";
-import { formatScore, type Score } from "../lib/score";
+import { formatScore, formatDiff, pointDiffs, rankCompare, type Score } from "../lib/score";
 
 // --- CÁC KIỂU DỮ LIỆU ---
 type SkillLevel = 'Mới chơi' | 'Yếu-' | 'Yếu' | 'Yếu+' | 'Trung bình-' | 'Trung bình' | 'Trung bình+' | 'Khá-' | 'Khá' | 'Khá+';
@@ -115,6 +115,7 @@ const dict = {
     noMatchResults: "Chưa có kết quả trận đấu.",
     matchLabel: "Trận",
     winLabel: "Thắng",
+    diffLabel: "Hiệu số",
     gameSettings: "CÀI ĐẶT TRẬN ĐẤU",
     totalCourts: "Tổng số sân",
     courtsTxt: "sân",
@@ -306,6 +307,7 @@ const dict = {
     noMatchResults: "No match results recorded.",
     matchLabel: "Games",
     winLabel: "Wins",
+    diffLabel: "Pt diff",
     gameSettings: "GAME SETTINGS",
     totalCourts: "Total Courts",
     courtsTxt: "courts",
@@ -2073,7 +2075,7 @@ export default function ClassicApp() {
                             <p className="text-center font-bold text-gray-500 py-10">{t.noMatchResults}</p>
                         ) : (
                             <div className="space-y-2">
-                                {[...players].filter(p => p.playCount > 0).sort((a, b) => b.wins - a.wins || a.playCount - b.playCount).map((p, index) => (
+                                {(() => { const diffs = pointDiffs(matchHistory); return [...players].filter(p => p.playCount > 0).sort((a, b) => rankCompare(a, b, diffs)).map((p, index) => (
                                     <div key={p.id} className="flex justify-between items-center bg-gray-50 p-3 neo-border">
                                         <div className="flex items-center gap-4">
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black border-2 border-black ${index === 0 ? 'bg-yellow-400' : index === 1 ? 'bg-gray-300' : index === 2 ? 'bg-[#cd7f32] text-white' : 'bg-white'}`}>{index + 1}</div>
@@ -2084,10 +2086,11 @@ export default function ClassicApp() {
                                         </div>
                                         <div className="text-right flex items-center gap-4">
                                             <div className="flex flex-col items-center"><span className="text-xs font-bold text-gray-500">{t.matchLabel}</span><span className="font-black">{p.playCount}</span></div>
+                                            {diffs.has(p.id) && <div className="flex flex-col items-center"><span className="text-xs font-bold text-gray-500">{t.diffLabel}</span><span className={`font-black ${diffs.get(p.id)! > 0 ? 'text-green-600' : diffs.get(p.id)! < 0 ? 'text-red-600' : ''}`}>{formatDiff(diffs.get(p.id))}</span></div>}
                                             <div className="flex flex-col items-center"><span className="text-xs font-bold text-yellow-600">{t.winLabel}</span><span className="font-black text-lg text-yellow-500">{p.wins}</span></div>
                                         </div>
                                     </div>
-                                ))}
+                                )); })()}
                             </div>
                         )}
                    </div>
